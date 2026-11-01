@@ -745,10 +745,11 @@ const ICON = {
   att:'<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>',
   leave:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg>',
   sched:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 9v12M15 9v12"/></svg>',
+  quality:'<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>',
   admin:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.9 2.6 2.6 3 5.2"/></svg>',
   out:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h11"/></svg>'
 };
-const PAGES = { home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
+const PAGES = { quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
@@ -756,7 +757,7 @@ async function render(){
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
   const swapsWaiting = (await swapQueue()).length;
-  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule']] : [['home','Home'],['att','Log in'],['leave','Leaves'],['sched','Schedule']];
+  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['quality','Quality']] : [['home','Home'],['att','Log in'],['leave','Leaves'],['sched','Schedule'],['quality','Quality']];
   if (u.admin) tabs.push(['admin','Access']);
   const hour=new Date().getHours(); const greet = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const [title, sub] = S.tab==='home' ? [`${greet}, ${esc(String(u.name).split(/\s+/)[0])}`, isMgr(u)?'Here is what needs your attention today.':'Here is your day.'] : PAGES[S.tab];
@@ -782,7 +783,7 @@ async function render(){
   $('#demoAs') && ($('#demoAs').onchange = e=>{ S.demoAs=e.target.value; S.tab='home'; boot(); });
   if (agent) await mountStatusBar();
   try {
-    await ({home:viewHome, att:viewAttendance, leave:viewLeave, sched:viewSchedule, admin:viewAdmin}[S.tab])();
+    await ({home:viewHome, att:viewAttendance, leave:viewLeave, sched:viewSchedule, quality:viewQuality, admin:viewAdmin}[S.tab])();
   } catch(e){ console.error(e); $('#view').innerHTML = `<div class="alert bad">This page didn't load: ${esc(e.message)}. Refresh to try again.</div>`; }
 }
 
@@ -1270,6 +1271,99 @@ async function paintSwapQueue(list){
   });
 }
 
+/* ============================ Quality ============================ */
+const qPct = v => v==null ? '—' : Math.round(v*100)+'%';
+const qCls = v => v==null ? '' : v>=0.9 ? 'ok' : v>=0.8 ? 'warn' : 'bad';
+function demoQuality(){
+  if (S._dq) return S._dq;
+  const acc = S.D.cache.access.rows.filter(r=>r['Portal Role']==='Agent'); const today=new Date(); const evals=[]; let n=0;
+  const clients=['GTO Ms. Salma A.','Zeina S. – GOLD','Mahmoud E. (HSBC-Gold)','Omar K. – Platinum','Nour H.'];
+  const types=[['CTC','Incorrect Financial Information'],['CTB','File Error'],['CTQ','CRT Breach'],['NCE','Soft-Skills Gap']];
+  acc.forEach((a,i)=>{ for(let k=0;k<4;k++){ const d=addDays(today,-(k*6+i%5)); const bad=(i+k)%5===0; const score = bad? 0.72 : (i+k)%3===0 ? 0.87 : 1;
+    evals.push({ id:'demo|'+(n++), month:'Oct 2026', sheet:'Evaluation ('+String(a._tl||'TL').split(' ')[0]+')', week:Math.ceil(d.getDate()/7), agent:a['Full Name'], agentEmail:a.Email, agentFull:a['Full Name'], tl:String(a._tl||'').split(' ')[0], tlEmail:a['Manager Email'], date:dkey(d), link:'', client:clients[(i+k)%5], score,
+      metrics:{RT:0.1,CRT:score<1?0.1:0.15,HRT:0.1,ETA:0.2,ICA:score<0.8?0.1:0.25,RN:0.1,IQ:0.1}, resolved:score<0.8?'No':'Yes', irresolution:score<0.8?'Agent-Related':'N/A', errors: score<1 ? [ {code:types[(i+k)%4][0], type:types[(i+k)%4][1]} ] : [], inquiry:['Financial Requests','Booking Support','Change Requests'][k%3], findings: score<1?'Shared a quotation without verifying availability with the supplier.':'Perfect Chat.', actions: score<0.8?'Coaching by TL (Below Target)':score<1?'Pass (Above Target)':'N/A (100% Score)' }); } });
+  const disputes=[{ ID:'DDEMO1', 'Raised At':new Date().toISOString(), 'Eval ID':evals.find(e=>e.score<0.8).id, Month:'Oct 2026', 'Agent Email':evals.find(e=>e.score<0.8).agentEmail, 'Agent Name':evals.find(e=>e.score<0.8).agentFull, 'Chat Date':evals.find(e=>e.score<0.8).date, Client:'', Score:0.72, 'Raised By':'tl1@gto.demo', Reason:'The supplier confirmed availability by phone before the quote — call log attached in the thread.', Status:'Open', 'Email Sent':'Yes' }];
+  return S._dq = { evals, disputes };
+}
+async function qualityData(force){
+  const u=S.me;
+  if (S.D instanceof ApiData){ if (force || !S._q) S._q = await S.D.call('GET','quality'); return S._q; }
+  const d = demoQuality(); const team = new Set(S.D.cache.access.rows.filter(r=>r['Manager Email']===u.email).map(r=>r.Email));
+  const all = ['Duty Manager','General Manager','HR'].includes(u.role) || u.row['Quality Team']==='Yes';
+  const evals = d.evals.filter(e=> all || e.agentEmail===u.email || (u.role==='Team Leader' && team.has(e.agentEmail)));
+  const ids=new Set(evals.map(e=>e.id));
+  return { evals, disputes:d.disputes.filter(x=>ids.has(x['Eval ID'])||all), canDispute:['Team Leader','Duty Manager','General Manager'].includes(u.role), canRespond: u.row['Quality Team']==='Yes' || u.role==='Duty Manager', quality:false };
+}
+async function viewQuality(){
+  const v=$('#view'); const u=S.me; let q;
+  try { q = await qualityData(); } catch(e){ v.innerHTML = `<div class="alert bad">The quality file couldn't be loaded: ${esc(e.message)}</div>`; return; }
+  S.qf = S.qf || { month:'', who:'', tl:'', q:'' }; const F=S.qf;
+  const months=[...new Set(q.evals.map(e=>e.month))]; if (!F.month || !months.includes(F.month)) F.month = months[months.length-1]||'';
+  const inMonth = q.evals.filter(e=>!F.month || e.month===F.month);
+  const openBy = {}; q.disputes.forEach(d=>{ (openBy[d['Eval ID']]=openBy[d['Eval ID']]||[]).push(d); });
+  const avg = list => list.length ? list.reduce((a,e)=>a+e.score,0)/list.length : null;
+  const mgr = isMgr(u) || q.quality;
+  const agents = {}; inMonth.forEach(e=>{ const k=e.agentEmail||e.agent; (agents[k]=agents[k]||{ name:e.agentFull, tl:e.tl, list:[] }).list.push(e); });
+  const agentRows = Object.entries(agents).map(([k,a])=>({ key:k, name:a.name, tl:a.tl, n:a.list.length, avg:avg(a.list), errors:a.list.reduce((s,e)=>s+e.errors.length,0), last:a.list.map(e=>e.date).sort().pop(), open:a.list.filter(e=>(openBy[e.id]||[]).some(d=>d.Status==='Open')).length })).sort((a,b)=>(a.avg??2)-(b.avg??2));
+  const openDisputes = q.disputes.filter(d=>d.Status==='Open');
+  const below = agentRows.filter(a=>a.avg!=null && a.avg<0.8).length;
+  const tls = [...new Set(inMonth.map(e=>e.tl).filter(Boolean))].sort();
+  v.innerHTML = `
+    <div class="row" style="margin-bottom:14px"><select id="qm" class="i" style="width:auto">${months.map(m=>`<option ${m===F.month?'selected':''}>${esc(m)}</option>`).join('')}</select><span class="muted">${inMonth.length} evaluated chat${inMonth.length===1?'':'s'}</span></div>
+    <div class="metrics">
+      ${mgr ? `<div class="m"><h3>${u.role==='Team Leader'?'Team':'Overall'} average</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(avg(inMonth))]||'inherit'}">${qPct(avg(inMonth))}</div><p>${agentRows.length} agents evaluated</p></div>
+               <div class="m"><h3>Below 80%</h3><div class="stat" style="${below?'color:var(--bad)':''}">${below}</div><p>agents needing coaching</p></div>`
+            : `<div class="m"><h3>My average</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(avg(inMonth))]||'inherit'}">${qPct(avg(inMonth))}</div><p>${esc(F.month)}</p></div>
+               <div class="m"><h3>Lowest score</h3><div class="stat">${inMonth.length?qPct(Math.min(...inMonth.map(e=>e.score))):'—'}</div><p>this month</p></div>`}
+      <div class="m"><h3>Evaluations</h3><div class="stat">${inMonth.length}</div><p>${inMonth.filter(e=>e.score>=1).length} perfect chats</p></div>
+      <div class="m"><h3>Open disputes</h3><div class="stat" style="${openDisputes.length?'color:var(--warn)':''}">${openDisputes.length}</div><p>${q.canRespond?'waiting for the quality team':'waiting for a decision'}</p></div>
+    </div>
+    ${q.canRespond && openDisputes.length ? `<div class="card sec"><h2>Disputes to review <span class="muted" style="font-weight:500">${openDisputes.length}</span></h2><div id="qdq"></div></div>`:''}
+    ${mgr ? `<div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Agents</h2><span class="spacer"></span>${tls.length>1?`<select id="qtl" class="i" style="width:auto"><option value="">All team leaders</option>${tls.map(t=>`<option ${t===F.tl?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}</div>
+      <div class="tablewrap" style="max-height:420px"><table><thead><tr><th>Agent</th><th>Team leader</th><th>Chats</th><th>Average</th><th>Errors</th><th>Last evaluated</th><th>Disputes</th></tr></thead><tbody>
+      ${agentRows.filter(a=>!F.tl||a.tl===F.tl).map(a=>`<tr data-agent="${esc(a.key)}" style="cursor:pointer"><td><b>${esc(a.name)}</b></td><td class="muted">${esc(a.tl)}</td><td class="num">${a.n}</td><td><span class="chip ${qCls(a.avg)}">${qPct(a.avg)}</span></td><td class="num">${a.errors}</td><td>${a.last?fmtDate(a.last):'—'}</td><td>${a.open?`<span class="chip warn">${a.open} open</span>`:''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">No evaluations for this month.</td></tr>'}
+      </tbody></table></div></div>` : ''}
+    <div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">${mgr?'Evaluations':'My evaluations'}</h2><span class="spacer"></span>${mgr?`<input id="qq" class="i" style="width:220px" placeholder="Search agent or client" value="${esc(F.q)}">`:''}${F.who?`<button class="btn sm" id="qclr">Show all agents</button>`:''}</div><div id="qlist"></div></div>
+    ${q.disputes.length ? `<div class="card sec"><h2>${mgr?'Disputes':'Disputes about my evaluations'}</h2><div id="qdisp"></div></div>`:''}`;
+  const paintList = () => {
+    const s=norm(F.q); const list = inMonth.filter(e=>(!F.who||(e.agentEmail||e.agent)===F.who) && (!F.tl||e.tl===F.tl) && (!s || norm(e.agentFull+' '+e.client).includes(s))).sort((a,b)=>a.date<b.date?1:-1);
+    $('#qlist').innerHTML = list.length ? `<div class="tablewrap" style="max-height:560px"><table><thead><tr><th>Chat date</th>${mgr?'<th>Agent</th>':''}<th>Client</th><th>Score</th><th>Errors</th><th>Inquiry</th><th>Dispute</th><th></th></tr></thead><tbody>${list.map(e=>{ const ds=openBy[e.id]||[]; const last=ds[ds.length-1];
+      return `<tr><td>${e.date?fmtDate(e.date):'—'}</td>${mgr?`<td>${esc(e.agentFull)}</td>`:''}<td class="muted">${esc(e.client)}</td><td><span class="chip ${qCls(e.score)}">${qPct(e.score)}</span></td><td>${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}" title="${esc(x.type)}">${esc(x.code)}</span>`).join('')||'<span class="muted">None</span>'}</td><td class="muted">${esc(e.inquiry)}</td><td>${last?statusChip(last.Status):''}</td><td><button class="btn sm" data-ev="${esc(e.id)}">View</button></td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${mgr?'No evaluations match.':'You have no evaluations this month.'}</div>`;
+    document.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>evalDetail(q, q.evals.find(e=>e.id===b.dataset.ev), openBy));
+  };
+  paintList();
+  if ($('#qdisp')) $('#qdisp').innerHTML = `<div class="tablewrap" style="max-height:380px"><table><thead><tr><th>Raised</th><th>Agent</th><th>Chat</th><th>Score</th><th>Reason</th><th>Status</th><th>Quality response</th></tr></thead><tbody>${q.disputes.slice().reverse().map(d=>`<tr><td>${fmtDate(parseTs(d['Raised At']))}</td><td>${esc(d['Agent Name'])}</td><td>${d['Chat Date']?fmtDate(d['Chat Date']):''}</td><td>${qPct(+d.Score)}</td><td style="max-width:320px">${esc(d.Reason)}</td><td>${statusChip(d.Status)}</td><td class="muted" style="max-width:260px">${esc(d.Response||'')}</td></tr>`).join('')}</tbody></table></div>`;
+  if ($('#qdq')) { $('#qdq').innerHTML = openDisputes.map(d=>{ const e=q.evals.find(x=>x.id===d['Eval ID']); return `<div class="req"><div class="row"><b style="font-weight:600">${esc(d['Agent Name'])}</b><span class="chip ${qCls(+d.Score)}">${qPct(+d.Score)}</span><span class="muted">chat ${d['Chat Date']?fmtDate(d['Chat Date']):''}${e?` · ${esc(e.client)}`:''}</span><span class="spacer"></span><span class="muted" style="font-size:13px">raised ${fmtDate(parseTs(d['Raised At']))}</span></div>
+      <p style="margin:8px 0">${esc(d.Reason)}</p>${e&&e.findings?`<p class="muted" style="margin:0 0 8px;font-size:13.5px">Original findings: ${esc(e.findings)}</p>`:''}
+      <div class="row"><input class="i" style="flex:1;min-width:180px" placeholder="Response to the team leader" id="qr_${d.ID}">${e?`<button class="btn sm" data-ev2="${esc(e.id)}">View chat</button>`:''}<button class="btn primary" data-qa="${d.ID}" data-dec="Accepted">Accept</button><button class="btn danger" data-qa="${d.ID}" data-dec="Rejected">Reject</button></div></div>`; }).join('');
+    document.querySelectorAll('[data-ev2]').forEach(b=>b.onclick=()=>evalDetail(q, q.evals.find(e=>e.id===b.dataset.ev2), openBy));
+    document.querySelectorAll('[data-qa]').forEach(b=>b.onclick=async()=>{ b.disabled=true; const id=b.dataset.qa;
+      try{ if (S.D instanceof ApiData) await S.D.call('POST','disputerespond',{ id, decision:b.dataset.dec, note:$('#qr_'+id).value.trim() }); else { const d=S._dq.disputes.find(x=>x.ID===id); Object.assign(d,{Status:b.dataset.dec,Response:$('#qr_'+id).value.trim()}); }
+        toast('Dispute '+b.dataset.dec.toLowerCase()); await qualityData(true); viewQuality(); }catch(e){ alertBox(e); b.disabled=false; } }); }
+  $('#qm').onchange=e=>{ F.month=e.target.value; viewQuality(); };
+  $('#qtl') && ($('#qtl').onchange=e=>{ F.tl=e.target.value; viewQuality(); });
+  $('#qq') && ($('#qq').oninput=e=>{ F.q=e.target.value; clearTimeout(window._qq); window._qq=setTimeout(paintList,250); });
+  $('#qclr') && ($('#qclr').onclick=()=>{ F.who=''; viewQuality(); });
+  document.querySelectorAll('[data-agent]').forEach(tr=>tr.onclick=()=>{ F.who=tr.dataset.agent; viewQuality(); setTimeout(()=>$('#qlist')&&$('#qlist').scrollIntoView({behavior:'smooth'}),50); });
+}
+function evalDetail(q, e, openBy){
+  if (!e) return; const ds=openBy[e.id]||[]; const open=ds.find(d=>d.Status==='Open');
+  const m = Object.entries(e.metrics||{});
+  modal(`<div class="row"><h2 style="margin:0">${esc(e.agentFull)}</h2><span class="chip ${qCls(e.score)}" style="font-size:15px">${qPct(e.score)}</span></div>
+    <p class="muted" style="margin:6px 0 14px">${e.date?fmtDate(e.date):''} · ${esc(e.client)} · ${esc(e.inquiry)} · ${esc(e.month)}${e.link?` · <a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--gold)">Open chat</a>`:''}</p>
+    ${m.length?`<div class="counts" style="margin:0 0 14px">${m.map(([k,v])=>`<div><b>${v==null?'—':Math.round(v*100)}</b>${esc(k)}</div>`).join('')}</div>`:''}
+    <p><b>Issue resolved:</b> ${esc(e.resolved||'—')}${e.irresolution&&e.irresolution!=='N/A'?` (${esc(e.irresolution)})`:''}</p>
+    ${e.errors.length?`<p><b>Errors:</b> ${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}">${esc(x.code)}: ${esc(x.type||'—')}</span>`).join('')}</p>`:'<p><b>Errors:</b> none</p>'}
+    <p><b>Findings:</b> ${esc(e.findings||'—')}</p><p><b>Action:</b> ${esc(e.actions||'—')}</p>
+    ${ds.length?`<h3 style="margin-top:16px">Disputes</h3>${ds.map(d=>`<div class="req" style="padding:10px 12px"><div class="row">${statusChip(d.Status)}<span class="muted" style="font-size:13px">${fmtDate(parseTs(d['Raised At']))}</span></div><p style="margin:6px 0 0">${esc(d.Reason)}</p>${d.Response?`<p class="muted" style="margin:6px 0 0">Quality: ${esc(d.Response)}</p>`:''}</div>`).join('')}`:''}
+    ${q.canDispute && !open && e.agentEmail!==S.me.email ? `<h3 style="margin-top:16px">Raise a dispute</h3><textarea id="dreason" class="i" rows="3" placeholder="Explain what the evaluation got wrong. The quality team gets an email."></textarea><div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="dgo">Send dispute</button></div>`
+      : `<div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn" data-close>Close</button></div>`}`);
+  $('#dgo') && ($('#dgo').onclick=async()=>{ const reason=$('#dreason').value.trim(); if (reason.length<5) return toast('Please explain the dispute'); $('#dgo').disabled=true;
+    try{ let res={emailed:'Yes'}; if (S.D instanceof ApiData) res = await S.D.call('POST','dispute',{ evalId:e.id, reason });
+      else S._dq.disputes.push({ ID:uid('D'), 'Raised At':new Date().toISOString(), 'Eval ID':e.id, 'Agent Email':e.agentEmail, 'Agent Name':e.agentFull, 'Chat Date':e.date, Score:e.score, 'Raised By':S.me.email, Reason:reason, Status:'Open' });
+      closeModal(); toast(res.emailed==='Yes'?'Dispute sent to the quality team':'Dispute saved (email could not be sent)'); await qualityData(true); viewQuality(); }catch(err){ alertBox(err); } });
+}
+
 /* ============================ Home ============================ */
 async function viewHome(){
   const v=$('#view'); const u=S.me; const lim=S.settings.EmergencyLimit;
@@ -1316,7 +1410,7 @@ function editPerson(r){
     ${f('Portal Role','Portal role',`<select class="i" data-k="Portal Role"><option value="">—</option>${ROLES.map(x=>`<option ${r['Portal Role']===x?'selected':''}>${x}</option>`).join('')}</select>`)}
     ${f('Team Leader','Team leader',`<select class="i" data-k="Team Leader"><option value="">—</option>${t.rows.filter(x=>['Team Leader','Duty Manager','General Manager','HR'].includes(x['Portal Role'])).map(x=>`<option value="${esc(x['Full Name'])}" ${norm(r._tl||r['Team Leader'])===norm(x['Full Name'])?'selected':''}>${esc(x['Full Name'])} (${esc(x['Portal Role'])})</option>`).join('')}</select>`)}
     ${f('Team','Team')}${f('Tracker Role','Role written in the Leaves Tracker (e.g. Enquiry Agent)')}${f('Rota Name','Name in the rota (only if not found automatically)')}
-    <div class="row">${f('Portal Admin','Portal admin',`<select class="i" data-k="Portal Admin"><option ${yes(r['Portal Admin'])?'':'selected'}>No</option><option ${yes(r['Portal Admin'])?'selected':''}>Yes</option></select>`)}${f('Active','Active',`<select class="i" data-k="Active"><option ${/^no$/i.test(String(r.Active||''))?'':'selected'}>Yes</option><option ${/^no$/i.test(String(r.Active||''))?'selected':''}>No</option></select>`)}</div>
+    <div class="row">${f('Quality Team','Quality team',`<select class="i" data-k="Quality Team"><option ${yes(r['Quality Team'])?'':'selected'}>No</option><option ${yes(r['Quality Team'])?'selected':''}>Yes</option></select>`)}${f('Portal Admin','Portal admin',`<select class="i" data-k="Portal Admin"><option ${yes(r['Portal Admin'])?'':'selected'}>No</option><option ${yes(r['Portal Admin'])?'selected':''}>Yes</option></select>`)}${f('Active','Active',`<select class="i" data-k="Active"><option ${/^no$/i.test(String(r.Active||''))?'':'selected'}>Yes</option><option ${/^no$/i.test(String(r.Active||''))?'selected':''}>No</option></select>`)}</div>
     <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="psave">Save</button></div>`);
   $('#psave').onclick=async()=>{
     const o={...r}; delete o._tl; document.querySelectorAll('.modal [data-k]').forEach(i=>o[i.dataset.k]=i.value.trim());

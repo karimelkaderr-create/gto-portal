@@ -18,7 +18,7 @@ const BALANCE_SHEET = process.env.BALANCE_SHEET || 'Balance';
 const T = { access: 'tblAccess', att: 'tblAttendance', req: 'tblRequests', set: 'tblSettings', swap: 'tblSwaps' };
 const ROLES = ['Agent', 'Team Leader', 'Duty Manager', 'General Manager', 'HR'];
 const MANAGER_ROLES = ['Team Leader', 'Duty Manager', 'General Manager', 'HR'];
-const SCOPE = 'offline_access openid profile https://graph.microsoft.com/User.Read https://graph.microsoft.com/Files.ReadWrite.All';
+const SCOPE = 'offline_access openid profile https://graph.microsoft.com/User.Read https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Mail.Send';
 
 /* ---------------- helpers ---------------- */
 const pad = n => String(n).padStart(2, '0');
@@ -203,11 +203,11 @@ const isMgr = u => u.role !== 'Agent';
 const teamEmails = (u, acc) => new Set(acc.rows.filter(r => r['Manager Email'] === u.email).map(r => r.Email).filter(Boolean));
 const seesAll = u => ['Duty Manager', 'General Manager', 'HR'].includes(u.role);
 const canRaiseForOthers = u => ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role);
-const publicPerson = r => ({ _i: r._i, Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], 'Team Leader': r['Team Leader'], 'Manager Email': r['Manager Email'], Team: r.Team, 'Tracker Role': r['Tracker Role'], 'Rota Name': r['Rota Name'], Active: r.Active, 'Roster Name': r['Roster Name'], _tl: r._tl });
+const publicPerson = r => ({ _i: r._i, Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], 'Team Leader': r['Team Leader'], 'Manager Email': r['Manager Email'], Team: r.Team, 'Tracker Role': r['Tracker Role'], 'Rota Name': r['Rota Name'], Active: r.Active, 'Roster Name': r['Roster Name'], 'Quality Team': r['Quality Team'], _tl: r._tl });
 
 /* ---------------- read: everything the page needs, filtered by role ---------------- */
 async function readData(u, acc, parts) {
-  const want = p => !parts || parts.includes(p); const out = { me: { email: u.email, name: u.name, role: u.role, admin: u.admin } };
+  const want = p => !parts || parts.includes(p); const out = { me: { email: u.email, name: u.name, role: u.role, admin: u.admin, quality: yes(u.row['Quality Team']) } };
   const team = teamEmails(u, acc);
   if (want('access')) {
     let rows;
@@ -335,6 +335,123 @@ async function doAccess(u, acc, b) {
   return { ok: true };
 }
 
+/* ---------------- quality: evaluations + disputes ---------------- */
+const DEFAULT_QUALITY_URL = process.env.QUALITY_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/karim_abdelkader_gto_org_uk/IQCm4e8B9OfhTLZuFVv_YcYqAcy92G6NTopq-d0MHsDT9MI';
+const DISPUTE_HEADERS = ['ID', 'Raised At', 'Eval ID', 'Month', 'Agent Email', 'Agent Name', 'Chat Date', 'Client', 'Score', 'Raised By', 'Reason', 'Status', 'Responded By', 'Responded At', 'Response', 'Email Sent'];
+const QFILE_HEADERS = ['Month', 'File Link'];
+async function tableExists(url, name) { const b = await book(url); try { await g('GET', `${b}/tables/${encodeURIComponent(name)}?$select=name`); return true; } catch (e) { return false; } }
+async function ensureTable(url, sheet, name, headers, firstRows = []) {
+  if (await tableExists(url, name)) return;
+  const b = await book(url);
+  try { await g('POST', `${b}/worksheets/add`, { name: sheet }); } catch (e) { /* sheet may exist */ }
+  const last = String.fromCharCode(64 + headers.length);
+  const rows = [headers, ...firstRows];
+  await g('PATCH', `${b}/worksheets('${encodeURIComponent(sheet)}')/range(address='A1:${last}${rows.length}')`, { values: rows });
+  const t = await g('POST', `${b}/tables/add`, { address: `'${sheet}'!A1:${last}${rows.length}`, hasHeaders: true });
+  await g('PATCH', `${b}/tables/${encodeURIComponent(t.id || t.name)}`, { name, style: 'TableStyleMedium2' });
+}
+async function ensureAccessColumn(acc, col) {
+  if (acc.headers.includes(col)) return;
+  const b = await book(URLS.portal);
+  await g('POST', `${b}/tables/${T.access}/columns/add`, { name: col });
+}
+async function qualityFiles() {
+  await ensureTable(URLS.portal, 'Quality Files', 'tblQualityFiles', QFILE_HEADERS, [['Oct 2026', DEFAULT_QUALITY_URL]]);
+  const t = await table(URLS.portal, 'tblQualityFiles');
+  return t.rows.filter(r => String(r['File Link'] || '').startsWith('https://')).map(r => ({ month: String(r.Month || '').trim() || 'Month', url: String(r['File Link']).trim() }));
+}
+const pct = v => { const n = typeof v === 'number' ? v : parseFloat(String(v).replace('%', '')) / (String(v).includes('%') ? 100 : 1); return isNaN(n) ? null : n; };
+function lev1(a, b) { if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, e = 0; while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++e > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } } return e + (a.length - i) + (b.length - j) <= 1; }
+function matchPerson(name, acc) {
+  const n = norm(name); if (!n) return null;
+  const exact = acc.rows.find(r => norm(r['Roster Name']) === n || norm(r['Full Name']) === n || (r['Quality Name'] && norm(r['Quality Name']) === n)); if (exact) return exact;
+  const toks = n.split(' '); let best = null, bs = 0, tie = false;
+  for (const r of acc.rows) {
+    const full = norm(r['Full Name']).split(' '); if (full[0] !== toks[0] && !(toks[0].length >= 5 && lev1(toks[0], full[0]))) continue;
+    if (!toks.slice(1).every(t => full.slice(1).some(f => f === t || (t.length > 3 && f.length > 3 && (f.startsWith(t) || t.startsWith(f) || lev1(t, f)))))) continue;
+    const sc = toks.length; if (sc > bs) { bs = sc; best = r; tie = false; } else if (sc === bs) tie = true;
+  }
+  return tie ? null : best;
+}
+let qCache = null;
+async function loadEvaluations(acc) {
+  if (qCache && Date.now() - qCache.at < 120e3) return qCache.items;
+  const files = await qualityFiles(); const items = [];
+  for (const [fi, f] of files.entries()) {
+    const names = (await sheetNames(f.url)).filter(n => /evaluation/i.test(n));
+    for (const sheet of names) {
+      const v = await sheetValues(f.url, sheet); const hr = v.findIndex(r => r.some(c => /agent'?s name/i.test(String(c)))); if (hr < 0) continue;
+      const H = v[hr].map(x => String(x || '').trim());
+      const idx = n => H.findIndex(h => h.toLowerCase().startsWith(n.toLowerCase()));
+      const all = (n) => H.map((h, i) => [h, i]).filter(([h]) => h.toLowerCase() === n.toLowerCase()).map(([, i]) => i);
+      const cAgent = idx("agent's name") >= 0 ? idx("agent's name") : idx('agent'), cTL = idx('tl name'), cWeek = idx('week'), cDate = idx('chat date'), cLink = idx('thread link'), cClient = idx("client"), cScore = H.lastIndexOf(H.find(h => /^score$/i.test(h)) || 'Score');
+      const metrics = ['RT', 'CRT', 'HRT', 'ETA', 'ICA', 'RN', 'IQ'].map(k => [k, H.findIndex(h => h.toUpperCase().startsWith(k + ' ('))]).filter(([, i]) => i >= 0);
+      const errCats = [['CTC', 'Critical-to-Customer'], ['CTB', 'Critical-to-Business'], ['CTQ', 'Critical-to-Quality'], ['NCE', 'Non-Critical Error'], ['ZTP', 'ZTP Violation']];
+      const typeCols = all('error type'), incCol = idx('ztp incident');
+      v.slice(hr + 1).forEach((r, k) => {
+        const agent = String(r[cAgent] || '').trim(); const score = pct(r[cScore]); if (!agent || score == null) return;
+        const p = matchPerson(agent, acc); const d = parseDateCell(r[cDate]);
+        const errors = [];
+        errCats.forEach(([code, head], j) => { const ci = H.findIndex(h => h.toLowerCase() === head.toLowerCase()); if (ci >= 0 && /^yes$/i.test(String(r[ci]).trim())) { const type = code === 'ZTP' ? r[incCol] : r[typeCols[j]]; errors.push({ code, type: String(type || '').trim() }); } });
+        items.push({ id: `${fi}|${sheet}|${hr + 2 + k}`, month: f.month, sheet, week: r[cWeek] ?? '', agent, agentEmail: p ? p.Email : '', agentFull: p ? p['Full Name'] : agent, tl: String(r[cTL] || '').trim(), tlEmail: p ? p['Manager Email'] : '',
+          date: d ? dkey(d) : '', link: /^https?:/i.test(String(r[cLink] || '')) ? String(r[cLink]) : '', client: String(r[cClient] || '').trim(), score,
+          metrics: Object.fromEntries(metrics.map(([m, i]) => [m, pct(r[i])])), resolved: String(r[idx('issue resolution')] ?? ''), irresolution: String(r[idx('irresolution')] ?? ''),
+          errors, inquiry: String(r[idx('inquiry type')] ?? ''), findings: String(r[idx('findings')] ?? ''), actions: String(r[idx('actions')] ?? '') });
+      });
+    }
+  }
+  qCache = { at: Date.now(), items }; return items;
+}
+async function loadDisputes() { await ensureTable(URLS.portal, 'Disputes', 'tblDisputes', DISPUTE_HEADERS); const t = await table(URLS.portal, 'tblDisputes'); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Agent Email'] = normEmail(r['Agent Email']); r['Raised By'] = normEmail(r['Raised By']); r['Raised At'] = tsString(r['Raised At']); r['Responded At'] = tsString(r['Responded At']); }); return t; }
+const isQuality = u => yes(u.row['Quality Team']);
+function canSeeEval(u, e, team) {
+  if (seesAll(u) || isQuality(u)) return true;
+  if (e.agentEmail === u.email) return true;
+  if (u.role === 'Team Leader') return team.has(e.agentEmail) || (!e.agentEmail && norm(e.tl) && norm(u.name).split(' ')[0] === norm(e.tl).split(' ')[0]);
+  return false;
+}
+async function readQuality(u, acc) {
+  await ensureAccessColumn(acc, 'Quality Team');
+  const team = teamEmails(u, acc); const [ev, dt] = await Promise.all([loadEvaluations(acc), loadDisputes()]);
+  const evals = ev.filter(e => canSeeEval(u, e, team));
+  const ids = new Set(evals.map(e => e.id));
+  const disputes = dt.rows.filter(d => ids.has(d['Eval ID']) || d['Raised By'] === u.email || isQuality(u) || seesAll(u));
+  return { evals, disputes, canDispute: ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role), canRespond: isQuality(u), quality: isQuality(u) };
+}
+function esch(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+async function sendMail(to, subject, html) {
+  const list = [...new Set(to.filter(e => /@/.test(e)))]; if (!list.length) return 'No recipients';
+  try { await g('POST', '/me/sendMail', { message: { subject, body: { contentType: 'HTML', content: html }, toRecipients: list.map(a => ({ emailAddress: { address: a } })) }, saveToSentItems: true }); return 'Yes'; }
+  catch (e) { return 'No – ' + e.message.slice(0, 120); }
+}
+async function doDispute(u, acc, b) {
+  if (!['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role)) deny('Only team leaders and managers can raise disputes.');
+  const reason = String(b.reason || '').trim(); if (reason.length < 5) bad('Please explain the dispute.');
+  const team = teamEmails(u, acc); const ev = (await loadEvaluations(acc)).find(e => e.id === b.evalId); if (!ev) bad('Evaluation not found.');
+  if (u.role === 'Team Leader' && !canSeeEval(u, ev, team)) deny('You can only dispute evaluations for your own team.');
+  const t = await loadDisputes(); if (t.rows.some(d => d['Eval ID'] === ev.id && d.Status === 'Open')) bad('This evaluation already has an open dispute.');
+  const row = { ID: uid('D'), 'Raised At': new Date().toISOString(), 'Eval ID': ev.id, Month: ev.month, 'Agent Email': ev.agentEmail, 'Agent Name': ev.agentFull, 'Chat Date': ev.date, Client: ev.client, Score: ev.score, 'Raised By': u.email, Reason: reason.slice(0, 1000), Status: 'Open' };
+  const qa = acc.rows.filter(r => yes(r['Quality Team']) && !isNo(r.Active)).map(r => r.Email);
+  const settings = await loadSettings(); if (settings.QualityEmail) qa.push(...String(settings.QualityEmail).split(/[,;\s]+/));
+  row['Email Sent'] = await sendMail(qa, `Quality dispute – ${ev.agentFull} – ${ev.date} (${Math.round(ev.score * 100)}%)`,
+    `<p>A quality dispute was raised in the GTO Operations Portal.</p><table cellpadding="6" style="border-collapse:collapse;font-family:Segoe UI,Arial">
+     <tr><td><b>Agent</b></td><td>${esch(ev.agentFull)}</td></tr><tr><td><b>Chat date</b></td><td>${esch(ev.date)}</td></tr><tr><td><b>Client</b></td><td>${esch(ev.client)}</td></tr>
+     <tr><td><b>Score</b></td><td>${Math.round(ev.score * 100)}%</td></tr><tr><td><b>Evaluation</b></td><td>${esch(ev.month)} · ${esch(ev.sheet)} · row ${esch(ev.id.split('|')[2])}</td></tr>
+     ${ev.link ? `<tr><td><b>Chat</b></td><td><a href="${esch(ev.link)}">Open thread</a></td></tr>` : ''}<tr><td><b>Raised by</b></td><td>${esch(u.name)} (${esch(u.role)})</td></tr>
+     <tr><td valign="top"><b>Reason</b></td><td>${esch(reason).replace(/\n/g, '<br>')}</td></tr></table><p>Review and respond in the portal: Quality tab → Disputes.</p>`);
+  await addRow(URLS.portal, 'tblDisputes', rowFor(t.headers, row));
+  return { ok: true, emailed: row['Email Sent'] };
+}
+async function doDisputeRespond(u, acc, b) {
+  if (!isQuality(u)) deny('Only the quality team can respond to disputes.');
+  const t = await loadDisputes(); const d = t.rows.find(x => x.ID === b.id); if (!d) bad('Dispute not found.'); if (d.Status !== 'Open') bad('This dispute is already closed.');
+  const status = b.decision === 'Accepted' ? 'Accepted' : b.decision === 'Rejected' ? 'Rejected' : null; if (!status) bad('Choose Accept or Reject.');
+  Object.assign(d, { Status: status, 'Responded By': u.email, 'Responded At': new Date().toISOString(), Response: String(b.note || '').slice(0, 1000) });
+  await setRow(URLS.portal, 'tblDisputes', d._i, t.headers.map(k => d[k] ?? ''));
+  await sendMail([d['Raised By']], `Quality dispute ${status.toLowerCase()} – ${d['Agent Name']} – ${d['Chat Date']}`, `<p>Your quality dispute for <b>${esch(d['Agent Name'])}</b> (chat ${esch(d['Chat Date'])}) was <b>${status.toLowerCase()}</b> by ${esch(u.name)}.</p>${d.Response ? `<p>${esch(d.Response)}</p>` : ''}<p>Details are in the portal: Quality tab.</p>`);
+  qCache = null; return { ok: true };
+}
+
 /* ---------------- one-time setup for the opsportal account ---------------- */
 function base(req) { return `https://${req.headers['x-forwarded-host'] || req.headers.host}`; }
 async function setup(req, res) {
@@ -380,6 +497,9 @@ export default async function handler(req, res) {
       case 'swapdecide': out = await doSwapUpdate(u, b, true); break;
       case 'swapcancel': out = await doSwapUpdate(u, b, false); break;
       case 'access': out = await doAccess(u, acc, b); break;
+      case 'quality': out = await readQuality(u, acc); break;
+      case 'dispute': out = await doDispute(u, acc, b); break;
+      case 'disputerespond': out = await doDisputeRespond(u, acc, b); break;
       default: throw new HttpError(404, 'Unknown request.');
     }
     res.setHeader('Cache-Control', 'no-store');
