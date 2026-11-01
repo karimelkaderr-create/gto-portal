@@ -215,17 +215,18 @@ async function readData(u, acc, parts) {
     out.access = { headers: acc.headers, rows };
   }
   if (want('settings')) out.settings = await loadSettings();
-  const jobs = [];
-  if (want('attendance')) jobs.push(loadAttendance().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.attendance = t; }));
-  if (want('requests')) jobs.push(loadRequests().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || r['Submitted By'] === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.requests = t; }));
-  if (want('swaps')) jobs.push(loadSwaps().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => [r['Requester Email'], r['Teammate Email']].includes(u.email) || (u.role === 'Team Leader' && (team.has(r['Requester Email']) || team.has(r['Teammate Email'])))); out.swaps = t; }));
-  if (want('tracker')) jobs.push(loadTracker().then(t => {
+  const jobs = []; out.warnings = [];
+  const safe = (label, pr) => pr.catch(e => { out.warnings.push(`${label}: ${e.message}`); });
+  if (want('attendance')) jobs.push(safe('Log-ins', loadAttendance().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.attendance = t; })));
+  if (want('requests')) jobs.push(safe('Leave requests', loadRequests().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || r['Submitted By'] === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.requests = t; })));
+  if (want('swaps')) jobs.push(safe('Swaps', loadSwaps().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => [r['Requester Email'], r['Teammate Email']].includes(u.email) || (u.role === 'Team Leader' && (team.has(r['Requester Email']) || team.has(r['Teammate Email'])))); out.swaps = t; })));
+  if (want('tracker')) jobs.push(safe('Leaves Tracker', loadTracker().then(t => {
     const mine = norm(u.name);
     const items = isMgr(u) ? t.items : t.items.map(x => x.n === mine ? x : { _i: -1, name: '', n: '', date: x.date, role: x.role, type: '', status: x.approved ? 'Approved' : x.status ? 'Other' : '', by: '', comment: '', approved: x.approved, pending: x.pending, cancelled: x.cancelled });
     out.tracker = { headers: [], items };
-  }));
-  if (want('balance')) jobs.push(loadBalance().then(b => { out.balance = isMgr(u) ? b : { [norm(u.name)]: b[norm(u.name)] }; }));
-  if (want('weeks')) jobs.push(loadWeeks().then(w => { out.weeks = w; }));
+  })));
+  if (want('balance')) jobs.push(safe('Leaves Tracker (Balance tab)', loadBalance().then(b => { out.balance = isMgr(u) ? b : { [norm(u.name)]: b[norm(u.name)] }; })));
+  if (want('weeks')) jobs.push(safe('Rota', loadWeeks().then(w => { out.weeks = w; })));
   await Promise.all(jobs);
   return out;
 }

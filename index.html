@@ -592,7 +592,14 @@ class ApiData extends Data {
     if (d.balance){ for (const k in d.balance){ const b=d.balance[k]; if (b){ b.start=b.start&&fromKey(b.start); b.allowanceStart=b.allowanceStart&&fromKey(b.allowanceStart); } } this.cache.bal = d.balance; }
     if (d.weeks) this.cache.weeks = d.weeks.map(w=>({ name:w.name, start:fromKey(w.start) }));
   }
-  async load(parts){ this.absorb(await this.call('GET','data',null, parts?{parts:parts.join(',')}:null)); }
+  async load(parts){
+    const d = await this.call('GET','data',null, parts?{parts:parts.join(',')}:null);
+    const want = p => !parts || parts.includes(p);
+    const empty = { attendance:{headers:[],rows:[]}, requests:{headers:[],rows:[]}, swaps:{headers:[],rows:[]}, tracker:{headers:[],items:[]}, balance:{}, weeks:[] };
+    for (const k in empty) if (want(k) && d[k]===undefined) d[k] = empty[k];
+    this.warnings = d.warnings || [];
+    this.absorb(d);
+  }
   async access(force){ if (force || !this.cache.access) await this.load(['access']); return this.cache.access; }
   async settings(){ if (!this.cache.settings) await this.load(['settings']); return this.cache.settings; }
   async attendance(force){ if (force || !this.cache.att) await this.load(['attendance']); return this.cache.att; }
@@ -766,6 +773,7 @@ async function render(){
         <select id="demoAs" class="i">${(await S.D.access()).rows.map(r=>`<option value="${r.Email}" ${r.Email===S.demoAs?'selected':''}>${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select></div>`:''}
       ${agent?'<div class="statusbar" id="statusbar" role="region" aria-label="Your status"></div>':''}
       <header class="ph"><div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
+      ${S.D && S.D.warnings && S.D.warnings.length ? `<div style="padding:0 36px;max-width:1300px"><div class="alert warn" style="margin:14px 0 0"><b>Some data couldn't be loaded:</b> ${S.D.warnings.map(esc).join(' · ')}</div></div>` : ''}
       <main id="view"><div class="loading">Loading…</div></main>
     </div>
   </div>`;
