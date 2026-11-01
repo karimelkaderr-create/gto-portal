@@ -753,6 +753,7 @@ const PAGES = { quality:['Quality','Chat evaluations and disputes.'], home:['Hom
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
+  const myRender = S.renderId = (S.renderId||0) + 1;
   const agent = u.role==='Agent'; if (agent && S.tab==='att') S.tab='home';
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
@@ -784,7 +785,7 @@ async function render(){
   if (agent) await mountStatusBar();
   try {
     await ({home:viewHome, att:viewAttendance, leave:viewLeave, sched:viewSchedule, quality:viewQuality, admin:viewAdmin}[S.tab])();
-  } catch(e){ console.error(e); $('#view').innerHTML = `<div class="alert bad">This page didn't load: ${esc(e.message)}. Refresh to try again.</div>`; }
+  } catch(e){ console.error(e); if (S.renderId !== myRender) return; /* a newer page load replaced this one */ $('#view').innerHTML = `<div class="alert bad">This page didn't load: ${esc(e.message)}. Refresh to try again.</div>`; }
 }
 
 /* agent status bar: Work / Break / Log out */
@@ -825,12 +826,14 @@ async function mountStatusBar(){
 
 /* the shift board – used on Home and Log in */
 async function mountBoard(el, after){
+  if (!el) return;
   const u=S.me; const bm=S.settings.BreakMinutes; const actions = u.role!=='Agent';
   await S.D.attendance(); const today=new Date(); today.setHours(0,0,0,0);
   const sh = await S.D.shiftFor(u.row,today); const ps = parseShift(sh.text);
   const shiftLabel = ps ? ps.label : (sh.text ? sh.text.split('/')[0].trim() : 'Not on rota');
   const shiftNote = ps ? (sh.text.split('/').slice(1).join(' / ').trim() || 'Scheduled today') : (sh.text?'No working hours today':'No shift found this week');
   const paint = () => {
+    if (!el.isConnected){ return; }
     const s2 = shiftState(S.D.cache.att.rows, u.email); const used = s2.breakMins; const pct = Math.min(100, used/bm*100);
     let cls='s-out', state=actions?'Not clocked in':'Logged out', note= ps?`Shift starts ${pad(Math.floor(ps.start/60)%24)}:${pad(ps.start%60)}`:(actions?'Clock in when you start':'Press Work in the top bar to start'), btns=`<button class="bbtn go" data-act="Clock In">Clock in</button>`;
     if (s2.open && s2.onBreak){ const left=bm-used; cls= left>=0?'s-break':'s-over'; state = left>=0?'On break':'Break over'; note = left>=0?`${fmtMins(left)} left`:`Over by ${fmtMins(-left)}`; btns=`<button class="bbtn go" data-act="Break End">End break</button>`; }
@@ -1366,13 +1369,14 @@ function evalDetail(q, e, openBy){
 
 /* ============================ Home ============================ */
 async function viewHome(){
-  const v=$('#view'); const u=S.me; const lim=S.settings.EmergencyLimit;
+  const myRender = S.renderId; const v=$('#view'); const u=S.me; const lim=S.settings.EmergencyLimit;
   const [st, queue, sq] = await Promise.all([leaveStats(u.row), approvalQueue(), swapQueue()]);
   const alerts = isMgr(u)? await emergencyAlerts():[];
   const myPending = (await S.D.requests()).rows.filter(r=>r.Email===u.email&&/^Pending/.test(r.Status)).length;
   const mon = mondayOf(new Date()); const days=[0,1,2,3,4,5,6].map(i=>addDays(mon,i));
   const shifts = await Promise.all(days.map(d=>S.D.shiftFor(u.row,d)));
   const tk = dkey(new Date());
+  if (S.renderId !== myRender) return;
   v.innerHTML = `
     ${alerts.length?`<div class="alert bad" data-go="leave" style="cursor:pointer"><b>${alerts.length} ${alerts.length===1?'person is':'people are'} over ${lim} emergency days:</b> ${alerts.slice(0,4).map(a=>esc(a.name)+' ('+a.count+')').join(', ')}${alerts.length>4?' and more':''}. Open Leaves to review.</div>`:''}
     <div id="board"></div>
@@ -1386,7 +1390,7 @@ async function viewHome(){
     <div class="row sec" style="margin-bottom:10px"><h2 style="margin:0;font-size:17px;font-weight:600">This week</h2><span class="spacer"></span><button class="btn sm" data-go="sched">Full schedule</button></div>
     <div class="week">${days.map((d,i)=>{ const t=shifts[i].text; const ps=parseShift(t); const off=!ps; return `<div class="${dkey(d)===tk?'today':''} ${off?'off':''}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(t)}">${esc(ps?ps.label:(t||'—'))}</b></div>`; }).join('')}</div>`;
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.go; render(); });
-  await mountBoard($('#board'));
+  if (S.renderId === myRender) await mountBoard($('#board'));
 }
 
 /* ============================ Admin (Access list) ============================ */
