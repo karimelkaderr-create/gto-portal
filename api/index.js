@@ -56,7 +56,14 @@ const bad = msg => { throw new HttpError(400, msg); };
 /* ---------------- rota parsing (same as the page) ---------------- */
 const DAYRX = /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?\s+(\d{1,2})\s*\/\s*(\d{1,2})/i;
 function dateFromDM(d, m, near) { const base = near || new Date(); let best = null, bd = 1e15; for (const y of [base.getFullYear() - 1, base.getFullYear(), base.getFullYear() + 1]) { const x = new Date(y, m - 1, d); const diff = Math.abs(x - base); if (diff < bd) { bd = diff; best = x; } } return best; }
-function sheetWeekStart(name) { const m = String(name).match(/(\d{1,2})\s*\.\s*(\d{1,2})/); return m ? dateFromDM(+m[1], +m[2], new Date()) : null; }
+// Tab names carry no year ("WK 02.11"). Every week tab starts on a Monday, so take the year in which that date is a Monday
+// (nearest to today); only if none is, fall back to the nearest date.
+function sheetWeekStart(name, today = new Date()) {
+  const m = String(name).match(/(\d{1,2})\s*\.\s*(\d{1,2})/); if (!m) return null; const d = +m[1], mo = +m[2];
+  const cands = [-1, 0, 1].map(k => new Date(today.getFullYear() + k, mo - 1, d)).filter(x => x.getMonth() === mo - 1);
+  const mondays = cands.filter(x => x.getDay() === 1).sort((a, b) => Math.abs(a - today) - Math.abs(b - today));
+  return mondays[0] || dateFromDM(d, mo, today);
+}
 function parseRotaSheet(grid, weekStart) {
   const people = []; const seen = new Set();
   for (let r = 0; r < grid.length; r++) {
@@ -151,6 +158,8 @@ async function setRow(url, name, index, values) {
   return g('PATCH', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')/range(address='${m[2]}${row}:${m[4]}${row}')`, { values: [values] });
 }
 async function sheetNames(url) { const b = await book(url); return (await g('GET', `${b}/worksheets?$select=name`)).value.map(w => w.name); }
+// visible tabs only: hidden tabs in the rota are old weeks kept for reference
+async function visibleSheetNames(url) { const b = await book(url); return (await g('GET', `${b}/worksheets?$select=name,visibility`)).value.filter(w => !w.visibility || w.visibility === 'Visible').map(w => w.name); }
 async function sheetText(url, sheet) {
   const b = await book(url); const r = await g('GET', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')/usedRange(valuesOnly=true)?$select=text,address`);
   const m = r.address.match(/!([A-Z]+)(\d+)/); let col = 0; for (const ch of m[1]) col = col * 26 + ch.charCodeAt(0) - 64;
@@ -199,7 +208,7 @@ async function loadBalanceRaw() {
   return out;
 }
 async function loadWeeks() { return cached('weeks', 300000.0, loadWeeksRaw); }
-async function loadWeeksRaw() { return (await sheetNames(URLS.rota)).map(n => ({ name: n, start: sheetWeekStart(n) })).filter(x => x.start && /^w[kc]/i.test(x.name.trim())).sort((a, b) => a.start - b.start).map(w => ({ name: w.name, start: dkey(w.start) })); }
+async function loadWeeksRaw() { return (await visibleSheetNames(URLS.rota)).map(n => ({ name: n, start: sheetWeekStart(n) })).filter(x => x.start && /^w[kc]/i.test(x.name.trim())).sort((a, b) => a.start - b.start).map(w => ({ name: w.name, start: dkey(w.start) })); }
 
 /* ---------------- who is calling ---------------- */
 let jwks = null, jwksAt = 0;
