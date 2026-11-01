@@ -421,33 +421,42 @@ function sheetWeekStart(name){
   const d = dateFromDM(+m[1], +m[2], new Date());
   return d;
 }
+// one letter wrong, missing, extra or two letters swapped ("Asharf" = "Ashraf")
 function tokEq(a,b){ if (a===b) return true; if (a.length<4||b.length<4||Math.abs(a.length-b.length)>1) return false;
   const m=a.length,n=b.length, d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]); for(let j=1;j<=n;j++) d[0][j]=j;
-  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){ d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1); }
   return d[m][n]<=1; }
-function rotaScore(person, rp){
+// "El-Gendy" in the Access list = "Elgendy" on the rota
+const nameVariants = full => { const out=[...full]; for(let i=0;i<full.length-1;i++){ if(/^(el|al|abd|abu|abo)$/.test(full[i])){ out.push(full[i]+full[i+1]); if(i<full.length-2&&/^(el|al)$/.test(full[i+1])) out.push(full[i]+full[i+1]+full[i+2]); } } return out; };
+const teamFits = (role,team) => { team=String(team||'').toLowerCase(); if(!team) return false; if(role==='Agent') return /agent/.test(team); if(/Team Leader|Duty Manager|General Manager/.test(role)) return /tl|dm/.test(team); if(role==='Quality') return /qa|quality/.test(team); return false; };
+// common names (Mohamed, Ahmed…) count less than distinctive ones; a name in the same position and the right rota section break ties
+function rotaScore(person, rp, weight){
+  weight = weight || (()=>2);
   const full = norm(person['Full Name']).split(' ').filter(Boolean); if (!full.length) return 0;
   const toks = norm(rp.name).split(' ').filter(Boolean);
   if (!toks.length || toks[0] !== full[0]) return 0;
-  const rest = full.slice(1); let score = 1;
-  for (const t of toks.slice(1)){
-    if (rest.includes(t)) score += 2;
-    else if (rest.some(f=>tokEq(t,f))) score += 1.5;
-    else if (t.length===1 && rest.some(f=>f[0]===t)) score += 1;
+  const rest = nameVariants(full.slice(1)); let score = 1;
+  for (let i=1;i<toks.length;i++){ const t=toks[i];
+    if (rest.includes(t)) score += weight(t)*1.5 + (full[i]===t?0.5:0);
+    else if (rest.some(f=>tokEq(t,f))) score += weight(t);
+    else if (t.length===1 && rest.some(f=>f[0]===t)) score += 0.5;
     else if (t.length<=2) continue;                      // el, al …
     else return 0;
   }
   if (toks.join(' ')===full.join(' ')) score += 5;
+  if (teamFits(person['Portal Role'], rp.team)) score += 0.75;
   return score;
 }
 function buildRotaIndex(accessRows, rotaPeople){
   const idx = new Map(); const claim = new Map();
+  const freq = {}; accessRows.forEach(a=>new Set(norm(a['Full Name']).split(' ')).forEach(t=>freq[t]=(freq[t]||0)+1));
+  const weight = t => accessRows.length > 20 && (freq[t]||0) > 6 ? 1 : 2;
   for (const person of accessRows){
     const key = person.Email || person['Full Name'];
     const override = norm(person['Rota Name']);
     if (override){ const hit = rotaPeople.find(p=>norm(p.name)===override); if (hit){ idx.set(key, hit); continue; } }
     let best=null, bs=0, tie=false;
-    for (const rp of rotaPeople){ const sc = rotaScore(person, rp); if (sc>bs){bs=sc;best=rp;tie=false;} else if (sc && sc===bs && rp!==best) tie=true; }
+    for (const rp of rotaPeople){ const sc = rotaScore(person, rp, weight); if (sc>bs){bs=sc;best=rp;tie=false;} else if (sc && sc===bs && rp!==best) tie=true; }
     if (best && !tie){ idx.set(key, best); const c = claim.get(best)||[]; c.push([key,bs]); claim.set(best,c); }
   }
   for (const [rp, list] of claim){                       // one rota row → one person
