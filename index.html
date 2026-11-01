@@ -162,6 +162,7 @@ tbody tr:hover td{background:rgba(255,255,255,.03)}
 .chip.warn{background:var(--warn-soft);color:var(--warn)}
 .chip.info{background:var(--info-soft);color:var(--info)}
 .chip.ok::before,.chip.bad::before,.chip.warn::before,.chip.info::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.req .kv{display:flex;flex-wrap:wrap;gap:6px 22px;margin:10px 0 2px}.req .kv span{display:flex;flex-direction:column;font-weight:600;font-size:14px}.req .kv small{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#999)}
 .alert{border-radius:12px;padding:13px 16px;margin-bottom:18px;border:1px solid currentColor;border-left-width:4px}
 .alert.bad{background:var(--bad-soft);color:var(--bad)}
 .alert.warn{background:var(--warn-soft);color:var(--warn)}
@@ -994,8 +995,9 @@ async function leaveStats(person){
   const emerg = mine.filter(x=>x.approved && x.type==='Emergency').length;
   const reqs = (await S.D.requests()).rows.filter(r=>r.Email===person.Email && /^Pending/.test(r.Status));
   const pendingDays = reqs.reduce((a,r)=>a+r.dateList.length,0);
+  const ptoPending = reqs.filter(r=>['Holiday','Emergency'].includes(r['Leave Type'])).reduce((a,r)=>a+r.dateList.length,0);
   const b = bal[n]; const allowance = b ? b.allowance : null;
-  return { mine, consumed, emerg, pendingDays, allowance, remaining: allowance==null?null:allowance-consumed, b };
+  return { mine, consumed, emerg, pendingDays, ptoPending, allowance, remaining: allowance==null?null:allowance-consumed, b };
 }
 async function emergencyAlerts(){
   const tr = (await S.D.tracker()).items; const lim = S.settings.EmergencyLimit; const acc = (await S.D.access()).rows;
@@ -1088,7 +1090,10 @@ async function reqForm(){
     const sel=[...document.querySelectorAll('#rdates input:checked')].map(i=>i.value);
     const type=$('#rtype').value; const st=await leaveStats(target); const lim=S.settings.EmergencyLimit; const msgs=[];
     if (type==='Emergency' && st.emerg+sel.length>lim) msgs.push(['bad',`This takes ${esc(target['Full Name'])} to ${st.emerg+sel.length} emergency days (limit ${lim}). It will be flagged to managers.`]);
-    if (type==='Holiday' && st.remaining!=null && st.remaining - st.pendingDays - sel.length < 0) msgs.push(['warn',`Not enough balance: ${st.remaining} remaining, ${st.pendingDays} already pending.`]);
+    const ptoLeft = st.remaining==null ? null : st.remaining - st.ptoPending; const over = type==='Holiday' && ptoLeft!=null && sel.length > ptoLeft;
+    if (over) msgs.push(['bad',`Not enough PTO balance: ${esc(target['Full Name'])} has <b>${Math.max(0,+ptoLeft.toFixed(1))}</b> ${ptoLeft===1?'day':'days'} left${st.ptoPending?` (${st.ptoPending} already waiting for approval)`:''}, and this request is for <b>${sel.length}</b>. Pick fewer days.`]);
+    else if (type==='Holiday' && ptoLeft!=null) msgs.push(['info',`PTO balance: ${+ptoLeft.toFixed(1)} ${ptoLeft===1?'day':'days'} left${st.ptoPending?` after pending requests`:''}. This request uses ${sel.length}.`]);
+    $('#rsend').disabled = over;
     const sm = await slotMap(); const role=target['Tracker Role'];
     const busy = sel.map(d=>[d,(sm[d]||[]).filter(x=>x.role===role).length]).filter(x=>x[1]>0);
     if (busy.length) msgs.push(['info',`Already off in ${esc(role||'this role')}: `+busy.map(([d,n])=>`${fmtDate(d)} <b>${n}</b>`).join(', ')]);
@@ -1109,6 +1114,12 @@ async function reqForm(){
     }catch(e){ alertBox(e); $('#rsend').disabled=false; }
   };
 }
+async function queueOf(p, dates){
+  const label = t => String(t||'').split('/').slice(1).map(x=>x.split(',')[0].trim()).filter(x=>x && !/^[\d:\- ]+$/.test(x) && !/^(v|r)$/i.test(x));
+  const seen = new Set(); const look = async list => { const t = await Promise.all(list.map(d=>S.D.shiftFor(p,d).catch(()=>({text:''})))); t.forEach(x=>label(x.text).forEach(l=>seen.add(l))); };
+  await look(dates.slice(0,7).map(fromKey)); if (!seen.size) await look([0,1,2,3,4,5,6].map(i=>addDays(mondayOf(new Date()),i)));
+  return [...seen].concat(p.Team && ![...seen].some(x=>norm(x)===norm(p.Team)) ? [p.Team] : []).join(' · ');
+}
 async function paintQueue(queue){
   const sm = await slotMap(); const lim=S.settings.EmergencyLimit; const acc=(await S.D.access()).rows; const nm=e=>(acc.find(r=>r.Email===e)||{})['Full Name']||e;
   const parts = [];
@@ -1116,10 +1127,14 @@ async function paintQueue(queue){
     const p = await personByEmail(r.Email) || {'Full Name':r.Name, Email:r.Email};
     const st = await leaveStats(p);
     const em = r['Leave Type']==='Emergency' && st.emerg + r.dateList.length > lim;
+    const qInfo = await queueOf(p, r.dateList); const tlName = p._tl || nm(p['Manager Email']) || p['Team Leader'] || '';
+    const ptoLeft = st.remaining==null ? null : st.remaining - (st.ptoPending - (['Holiday','Emergency'].includes(r['Leave Type'])?r.dateList.length:0));
+    const over = r['Leave Type']==='Holiday' && ptoLeft!=null && r.dateList.length > ptoLeft;
     parts.push(`<div class="req ${em?'flag':''}">
-      <div class="row"><b>${esc(r.Name)}</b><span class="chip">${esc(r['Tracker Role'])}</span><span class="chip ${r['Leave Type']==='Emergency'?'warn':'info'}">${esc(LEAVE_LABEL[r['Leave Type']]||r['Leave Type'])}</span>${statusChip(r.Status)}${em?`<span class="chip bad">Emergency ${st.emerg}+${r.dateList.length} &gt; ${lim}</span>`:''}<span class="spacer"></span><span class="muted">by ${esc(nm(r['Submitted By']))}</span></div>
+      <div class="row"><b>${esc(r.Name)}</b><span class="chip ${r['Leave Type']==='Emergency'?'warn':'info'}">${esc(LEAVE_LABEL[r['Leave Type']]||r['Leave Type'])}</span>${statusChip(r.Status)}${em?`<span class="chip bad">Emergency ${st.emerg}+${r.dateList.length} &gt; ${lim}</span>`:''}${over?`<span class="chip bad">Over PTO balance</span>`:''}<span class="spacer"></span><span class="muted">by ${esc(nm(r['Submitted By']))}</span></div>
+      <div class="kv"><span><small>Role</small>${esc(r['Tracker Role']||p['Tracker Role']||p['Portal Role']||'—')}</span><span><small>Queue</small>${esc(qInfo||'—')}</span><span><small>Team leader</small>${esc(tlName||'—')}</span><span><small>Days</small>${r.dateList.length}</span></div>
       <div style="margin:8px 0">${r.dateList.map(d=>{ const others=(sm[d]||[]).filter(x=>x.role===r['Tracker Role'] && norm(x.name)!==norm(r.Name)); return `<span class="chip ${others.length>=3?'warn':''}">${fmtDate(d)}: <b>${others.length}</b> already off</span>`; }).join('')}</div>
-      <div class="muted">Balance: ${st.remaining??'—'} remaining · Emergency used ${st.emerg}/${lim}${r.Reason?` · Reason: ${esc(r.Reason)}`:''}${r['Stage 1 By']?` · Manager approved: ${esc(nm(r['Stage 1 By']))}`:''}</div>
+      <div class="muted">PTO balance: ${ptoLeft==null?'—':+ptoLeft.toFixed(1)} days left before this request · Emergency used ${st.emerg}/${lim}${r.Reason?` · Reason: ${esc(r.Reason)}`:''}${r['Stage 1 By']?` · Manager approved: ${esc(nm(r['Stage 1 By']))}`:''}</div>
       <div class="row" style="margin-top:10px"><input class="i" style="flex:1;min-width:160px" placeholder="Note (optional)" id="n_${r.ID}"><button class="btn primary" data-ap="${r.ID}">Approve</button><button class="btn danger" data-rj="${r.ID}">Reject</button></div></div>`);
   }
   $('#queue').innerHTML = parts.join('');

@@ -276,6 +276,13 @@ async function doAttendance(u, acc, b) {
   await addRow(URLS.portal, T.att, rowFor(t.headers, row));
   return { row };
 }
+async function ptoLeft(person, reqs, excludeId) {
+  const n = norm(person['Full Name']); const [bal, tr] = await Promise.all([loadBalance(), loadTracker()]); const b = bal[n]; if (!b) return null;
+  const used = tr.items.filter(x => x.n === n && x.approved && (x.type === 'Holiday' || x.type === 'Emergency')).length;
+  const pending = reqs.filter(r => r.Email === person.Email && r.ID !== excludeId && /^Pending/.test(r.Status) && ['Holiday', 'Emergency'].includes(r['Leave Type'])).reduce((a, r) => a + r.dateList.length, 0);
+  return { allowance: b.allowance, used, pending, left: b.allowance - used - pending };
+}
+const plural = (n, w) => { n = +(+n).toFixed(1); return `${n} ${w}${n === 1 ? '' : 's'}`; };
 async function doRequest(u, acc, b) {
   const target = normEmail(b.email || u.email); const person = acc.rows.find(r => r.Email === target); if (!person) bad('Person not found.');
   if (target !== u.email && !canRaiseForOthers(u)) deny('You can only request leave for yourself.');
@@ -284,6 +291,7 @@ async function doRequest(u, acc, b) {
   const dates = [...new Set((b.dates || []).filter(isKey))].sort(); if (!dates.length || dates.length > 62) bad('Pick between 1 and 62 days.');
   const t = await loadRequestsRaw();
   if (t.rows.some(r => r.Email === target && /^Pending|^Approved/.test(r.Status) && r.dateList.some(d => dates.includes(d)))) bad('There is already a request covering one of these days.');
+  if (type === 'Holiday') { const bal = await ptoLeft(person, t.rows); if (bal && dates.length > bal.left) bad(`Not enough PTO balance: ${person['Full Name']} has ${plural(Math.max(0, bal.left), 'day')} left${bal.pending ? ` (after ${plural(bal.pending, 'day')} already waiting for approval)` : ''}, and this request is for ${plural(dates.length, 'day')}.`); }
   const row = { ID: uid('R'), 'Submitted At': new Date().toISOString(), Email: target, Name: person['Full Name'], 'Tracker Role': person['Tracker Role'], 'Leave Type': type, Dates: dates.join(', '), Days: dates.length, Reason: String(b.reason || '').slice(0, 300), 'Submitted By': u.email, Status: 'Pending Manager', 'Written To Tracker': 'No' };
   await addRow(URLS.portal, T.req, rowFor(t.headers, row));
   return { ok: true, id: row.ID };
@@ -308,6 +316,7 @@ async function doDecide(u, acc, b) {
     const mgr = (acc.rows.find(x => x.Email === r.Email) || {})['Manager Email'];
     if (r['Submitted By'] === u.email) deny("You raised this request, so another manager has to approve it.");
     if (!(u.role === 'Duty Manager' || (u.role === 'Team Leader' && mgr === u.email))) deny('Only the team leader or a Duty Manager can approve this step.');
+    if (ok && r['Leave Type'] === 'Holiday') { const p = acc.rows.find(x => x.Email === r.Email); const bal = p && await ptoLeft(p, t.rows, r.ID); if (bal && r.dateList.length > bal.left) bad(`Can't approve: ${r.Name} only has ${plural(Math.max(0, bal.left), 'PTO day')} left. Reject it so they can request fewer days.`); }
     if (!ok) { await updateReq(t, r, { Status: 'Rejected', 'Stage 1 By': u.email, 'Stage 1 At': now, 'Stage 1 Note': note }); return { status: 'Rejected' }; }
     const isGM = (acc.rows.find(x => x.Email === r.Email) || {})['Portal Role'] === 'General Manager';
     await updateReq(t, r, { Status: isGM ? 'Approved' : 'Pending GM', 'Stage 1 By': u.email, 'Stage 1 At': now, 'Stage 1 Note': note });
@@ -316,6 +325,7 @@ async function doDecide(u, acc, b) {
   }
   if (r.Status === 'Pending GM') {
     if (u.role !== 'General Manager') deny('Only the General Manager can give final approval.');
+    if (ok && r['Leave Type'] === 'Holiday') { const p = acc.rows.find(x => x.Email === r.Email); const bal = p && await ptoLeft(p, t.rows, r.ID); if (bal && r.dateList.length > bal.left) bad(`Can't approve: ${r.Name} only has ${plural(Math.max(0, bal.left), 'PTO day')} left. Reject it so they can request fewer days.`); }
     if (!ok) { await updateReq(t, r, { Status: 'Rejected', 'Stage 2 By': u.email, 'Stage 2 At': now, 'Stage 2 Note': note }); return { status: 'Rejected' }; }
     await updateReq(t, r, { Status: 'Approved', 'Stage 2 By': u.email, 'Stage 2 At': now, 'Stage 2 Note': note });
     try { await writeTracker(t, r, acc); } catch (e) { throw new HttpError(502, 'Approved, but writing to the Leaves Tracker failed: ' + e.message + '. Use "Retry tracker write".'); }
