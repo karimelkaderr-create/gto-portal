@@ -695,7 +695,7 @@ async function initAuth(){
   msalApp = new msal.PublicClientApplication({ auth:{ clientId:CONFIG.clientId, authority:`https://login.microsoftonline.com/${CONFIG.tenantId||'organizations'}`, redirectUri: location.origin+location.pathname }, cache:{ cacheLocation:'localStorage' } });
   if (msalApp.initialize) await msalApp.initialize();
   const r = await msalApp.handleRedirectPromise();
-  account = r?.account || msalApp.getAllAccounts()[0] || null;
+  account = r?.account || (msalApp.getActiveAccount && msalApp.getActiveAccount()) || msalApp.getAllAccounts()[0] || null;
   if (!account){ await msalApp.loginRedirect({ scopes: SCOPES }); return null; }
   msalApp.setActiveAccount && msalApp.setActiveAccount(account);
   return account;
