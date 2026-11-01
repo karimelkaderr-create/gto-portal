@@ -282,10 +282,10 @@ const yes = v => /^y(es)?$/i.test(String(v??'').trim()) || v===true;
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
 function rowsToObjects(values){ const h = values[0].map(x=>String(x??'').trim()); return { headers:h, rows: values.slice(1).map((r,i)=>{ const o={_i:i}; h.forEach((k,j)=>o[k]=r[j]); return o; }) }; }
 
-const ROLES = ['Agent','Team Leader','Duty Manager','General Manager','HR'];
+const ROLES = ['Agent','Team Leader','Duty Manager','General Manager','HR','Quality'];
 const LEAVE_TYPES_ALL = ['Holiday','Emergency','UPL','Sick'];
 const LEAVE_LABEL = {Holiday:'PTO (Holiday)',Emergency:'Emergency',UPL:'UPL',Sick:'Sick'};
-const isMgr = u => u && u.role !== 'Agent';
+const isMgr = u => u && ['Team Leader','Duty Manager','General Manager','HR'].includes(u.role);
 const canRaiseForOthers = u => ['Team Leader','Duty Manager','General Manager'].includes(u.role);
 
 /* ============================ shift text ============================ */
@@ -754,7 +754,7 @@ const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
   const myRender = S.renderId = (S.renderId||0) + 1;
-  const agent = u.role==='Agent'; if (agent && S.tab==='att') S.tab='home';
+  const agent = !isMgr(u); if (agent && S.tab==='att') S.tab='home';
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
   const swapsWaiting = (await swapQueue()).length;
@@ -827,7 +827,7 @@ async function mountStatusBar(){
 /* the shift board – used on Home and Log in */
 async function mountBoard(el, after){
   if (!el) return;
-  const u=S.me; const bm=S.settings.BreakMinutes; const actions = u.role!=='Agent';
+  const u=S.me; const bm=S.settings.BreakMinutes; const actions = isMgr(u);
   await S.D.attendance(); const today=new Date(); today.setHours(0,0,0,0);
   const sh = await S.D.shiftFor(u.row,today); const ps = parseShift(sh.text);
   const shiftLabel = ps ? ps.label : (sh.text ? sh.text.split('/')[0].trim() : 'Not on rota');
@@ -1292,10 +1292,10 @@ async function qualityData(force){
   const u=S.me;
   if (S.D instanceof ApiData){ if (force || !S._q) S._q = await S.D.call('GET','quality'); return S._q; }
   const d = demoQuality(); const team = new Set(S.D.cache.access.rows.filter(r=>r['Manager Email']===u.email).map(r=>r.Email));
-  const all = ['Duty Manager','General Manager','HR'].includes(u.role) || u.row['Quality Team']==='Yes';
+  const qa = u.role==='Quality' || u.row['Quality Team']==='Yes'; const all = ['Duty Manager','General Manager','HR'].includes(u.role) || qa;
   const evals = d.evals.filter(e=> all || e.agentEmail===u.email || (u.role==='Team Leader' && team.has(e.agentEmail)));
   const ids=new Set(evals.map(e=>e.id));
-  return { evals, disputes:d.disputes.filter(x=>ids.has(x['Eval ID'])||all), canDispute:['Team Leader','Duty Manager','General Manager'].includes(u.role), canRespond: u.row['Quality Team']==='Yes' || u.role==='Duty Manager', quality:false };
+  return { evals, disputes:d.disputes.filter(x=>ids.has(x['Eval ID'])||all), canDispute:['Team Leader','Duty Manager','General Manager'].includes(u.role), canRespond: qa, quality: qa };
 }
 async function viewQuality(){
   const v=$('#view'); const u=S.me; let q;
@@ -1359,12 +1359,12 @@ function evalDetail(q, e, openBy){
     ${e.errors.length?`<p><b>Errors:</b> ${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}">${esc(x.code)}: ${esc(x.type||'—')}</span>`).join('')}</p>`:'<p><b>Errors:</b> none</p>'}
     <p><b>Findings:</b> ${esc(e.findings||'—')}</p><p><b>Action:</b> ${esc(e.actions||'—')}</p>
     ${ds.length?`<h3 style="margin-top:16px">Disputes</h3>${ds.map(d=>`<div class="req" style="padding:10px 12px"><div class="row">${statusChip(d.Status)}<span class="muted" style="font-size:13px">${fmtDate(parseTs(d['Raised At']))}</span></div><p style="margin:6px 0 0">${esc(d.Reason)}</p>${d.Response?`<p class="muted" style="margin:6px 0 0">Quality: ${esc(d.Response)}</p>`:''}</div>`).join('')}`:''}
-    ${q.canDispute && !open && e.agentEmail!==S.me.email ? `<h3 style="margin-top:16px">Raise a dispute</h3><textarea id="dreason" class="i" rows="3" placeholder="Explain what the evaluation got wrong. The quality team gets an email."></textarea><div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="dgo">Send dispute</button></div>`
+    ${q.canDispute && !open && e.agentEmail!==S.me.email ? `<h3 style="margin-top:16px">Raise a dispute</h3><textarea id="dreason" class="i" rows="3" placeholder="Explain what the evaluation got wrong. The quality team will see it in the portal."></textarea><div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="dgo">Send dispute</button></div>`
       : `<div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn" data-close>Close</button></div>`}`);
   $('#dgo') && ($('#dgo').onclick=async()=>{ const reason=$('#dreason').value.trim(); if (reason.length<5) return toast('Please explain the dispute'); $('#dgo').disabled=true;
-    try{ let res={emailed:'Yes'}; if (S.D instanceof ApiData) res = await S.D.call('POST','dispute',{ evalId:e.id, reason });
+    try{ if (S.D instanceof ApiData) await S.D.call('POST','dispute',{ evalId:e.id, reason });
       else S._dq.disputes.push({ ID:uid('D'), 'Raised At':new Date().toISOString(), 'Eval ID':e.id, 'Agent Email':e.agentEmail, 'Agent Name':e.agentFull, 'Chat Date':e.date, Score:e.score, 'Raised By':S.me.email, Reason:reason, Status:'Open' });
-      closeModal(); toast(res.emailed==='Yes'?'Dispute sent to the quality team':'Dispute saved (email could not be sent)'); await qualityData(true); viewQuality(); }catch(err){ alertBox(err); } });
+      closeModal(); toast('Dispute sent to the quality team'); await qualityData(true); viewQuality(); }catch(err){ alertBox(err); } });
 }
 
 /* ============================ Home ============================ */
@@ -1376,8 +1376,17 @@ async function viewHome(){
   const mon = mondayOf(new Date()); const days=[0,1,2,3,4,5,6].map(i=>addDays(mon,i));
   const shifts = await Promise.all(days.map(d=>S.D.shiftFor(u.row,d)));
   const tk = dkey(new Date());
+  const qaUser = u.role==='Quality' || u.row['Quality Team']==='Yes';
+  let qNote = '';
+  if (!isMgr(u) || qaUser){ try { const q = await qualityData(); const open = q.disputes.filter(d=>d.Status==='Open');
+    if (qaUser && open.length) qNote = `<div class="alert" data-go="quality" style="cursor:pointer"><b>${open.length} quality ${open.length===1?'dispute is':'disputes are'} waiting for review.</b> Open Quality to accept or reject.</div>`;
+    else if (!qaUser){ const mine = q.disputes.filter(d=>d['Agent Email']===u.email); const o = mine.filter(d=>d.Status==='Open').length; const done = mine.filter(d=>d.Status!=='Open' && (Date.now()-parseTs(d['Responded At']))<14*864e5);
+      if (o) qNote = `<div class="alert" data-go="quality" style="cursor:pointer"><b>Your team leader raised ${o===1?'a dispute':o+' disputes'} about your quality ${o===1?'evaluation':'evaluations'}.</b> The quality team will review it. Open Quality to see the details.</div>`;
+      else if (done.length) qNote = `<div class="alert" data-go="quality" style="cursor:pointer"><b>A dispute about your quality evaluation was ${esc(done[done.length-1].Status.toLowerCase())}.</b> Open Quality to see the response.</div>`; }
+  } catch(e){} }
   if (S.renderId !== myRender) return;
   v.innerHTML = `
+    ${qNote}
     ${alerts.length?`<div class="alert bad" data-go="leave" style="cursor:pointer"><b>${alerts.length} ${alerts.length===1?'person is':'people are'} over ${lim} emergency days:</b> ${alerts.slice(0,4).map(a=>esc(a.name)+' ('+a.count+')').join(', ')}${alerts.length>4?' and more':''}. Open Leaves to review.</div>`:''}
     <div id="board"></div>
     <div class="metrics sec">

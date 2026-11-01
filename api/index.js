@@ -16,9 +16,9 @@ const URLS = {
 const TRACKER_TABLE = process.env.TRACKER_TABLE || 'Table1';
 const BALANCE_SHEET = process.env.BALANCE_SHEET || 'Balance';
 const T = { access: 'tblAccess', att: 'tblAttendance', req: 'tblRequests', set: 'tblSettings', swap: 'tblSwaps' };
-const ROLES = ['Agent', 'Team Leader', 'Duty Manager', 'General Manager', 'HR'];
+const ROLES = ['Agent', 'Team Leader', 'Duty Manager', 'General Manager', 'HR', 'Quality'];
 const MANAGER_ROLES = ['Team Leader', 'Duty Manager', 'General Manager', 'HR'];
-// '.default' = every Graph permission the admin has approved for the app (Files.ReadWrite.All, User.Read, and Mail.Send once approved)
+// '.default' = every Graph permission the admin has approved for the app (Files.ReadWrite.All, User.Read)
 const SCOPE = 'offline_access openid profile https://graph.microsoft.com/.default';
 
 /* ---------------- helpers ---------------- */
@@ -222,7 +222,7 @@ async function caller(req, acc) {
   if (!me || isNo(me.Active) || !ROLES.includes(me['Portal Role'])) throw new HttpError(403, `${email} isn't on the portal's access list. Ask your Duty Manager to add you.`);
   return { email: me.Email || email, name: me['Full Name'], role: me['Portal Role'], admin: yes(me['Portal Admin']), row: me };
 }
-const isMgr = u => u.role !== 'Agent';
+const isMgr = u => MANAGER_ROLES.includes(u.role);
 const teamEmails = (u, acc) => new Set(acc.rows.filter(r => r['Manager Email'] === u.email).map(r => r.Email).filter(Boolean));
 const seesAll = u => ['Duty Manager', 'General Manager', 'HR'].includes(u.role);
 const canRaiseForOthers = u => ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role);
@@ -429,7 +429,7 @@ async function loadEvaluations(acc) {
   qCache = { at: Date.now(), items }; return items;
 }
 async function loadDisputes() { await ensureTable(URLS.portal, 'Disputes', 'tblDisputes', DISPUTE_HEADERS); const t = await table(URLS.portal, 'tblDisputes'); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Agent Email'] = normEmail(r['Agent Email']); r['Raised By'] = normEmail(r['Raised By']); r['Raised At'] = tsString(r['Raised At']); r['Responded At'] = tsString(r['Responded At']); }); return t; }
-const isQuality = u => yes(u.row['Quality Team']);
+const isQuality = u => u.role === 'Quality' || yes(u.row['Quality Team']);
 function canSeeEval(u, e, team) {
   if (seesAll(u) || isQuality(u)) return true;
   if (e.agentEmail === u.email) return true;
@@ -445,11 +445,6 @@ async function readQuality(u, acc) {
   return { evals, disputes, canDispute: ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role), canRespond: isQuality(u), quality: isQuality(u) };
 }
 function esch(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-async function sendMail(to, subject, html) {
-  const list = [...new Set(to.filter(e => /@/.test(e)))]; if (!list.length) return 'No recipients';
-  try { await g('POST', '/me/sendMail', { message: { subject, body: { contentType: 'HTML', content: html }, toRecipients: list.map(a => ({ emailAddress: { address: a } })) }, saveToSentItems: true }); return 'Yes'; }
-  catch (e) { return 'No – ' + e.message.slice(0, 120); }
-}
 async function doDispute(u, acc, b) {
   if (!['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role)) deny('Only team leaders and managers can raise disputes.');
   const reason = String(b.reason || '').trim(); if (reason.length < 5) bad('Please explain the dispute.');
@@ -457,16 +452,9 @@ async function doDispute(u, acc, b) {
   if (u.role === 'Team Leader' && !canSeeEval(u, ev, team)) deny('You can only dispute evaluations for your own team.');
   const t = await loadDisputes(); if (t.rows.some(d => d['Eval ID'] === ev.id && d.Status === 'Open')) bad('This evaluation already has an open dispute.');
   const row = { ID: uid('D'), 'Raised At': new Date().toISOString(), 'Eval ID': ev.id, Month: ev.month, 'Agent Email': ev.agentEmail, 'Agent Name': ev.agentFull, 'Chat Date': ev.date, Client: ev.client, Score: ev.score, 'Raised By': u.email, Reason: reason.slice(0, 1000), Status: 'Open' };
-  const qa = acc.rows.filter(r => yes(r['Quality Team']) && !isNo(r.Active)).map(r => r.Email);
-  const settings = await loadSettings(); if (settings.QualityEmail) qa.push(...String(settings.QualityEmail).split(/[,;\s]+/));
-  row['Email Sent'] = await sendMail(qa, `Quality dispute – ${ev.agentFull} – ${ev.date} (${Math.round(ev.score * 100)}%)`,
-    `<p>A quality dispute was raised in the GTO Operations Portal.</p><table cellpadding="6" style="border-collapse:collapse;font-family:Segoe UI,Arial">
-     <tr><td><b>Agent</b></td><td>${esch(ev.agentFull)}</td></tr><tr><td><b>Chat date</b></td><td>${esch(ev.date)}</td></tr><tr><td><b>Client</b></td><td>${esch(ev.client)}</td></tr>
-     <tr><td><b>Score</b></td><td>${Math.round(ev.score * 100)}%</td></tr><tr><td><b>Evaluation</b></td><td>${esch(ev.month)} · ${esch(ev.sheet)} · row ${esch(ev.id.split('|')[2])}</td></tr>
-     ${ev.link ? `<tr><td><b>Chat</b></td><td><a href="${esch(ev.link)}">Open thread</a></td></tr>` : ''}<tr><td><b>Raised by</b></td><td>${esch(u.name)} (${esch(u.role)})</td></tr>
-     <tr><td valign="top"><b>Reason</b></td><td>${esch(reason).replace(/\n/g, '<br>')}</td></tr></table><p>Review and respond in the portal: Quality tab → Disputes.</p>`);
+  row['Email Sent'] = 'Portal only';
   await addRow(URLS.portal, 'tblDisputes', rowFor(t.headers, row));
-  return { ok: true, emailed: row['Email Sent'] };
+  qCache = null; return { ok: true };
 }
 async function doDisputeRespond(u, acc, b) {
   if (!isQuality(u)) deny('Only the quality team can respond to disputes.');
@@ -474,7 +462,6 @@ async function doDisputeRespond(u, acc, b) {
   const status = b.decision === 'Accepted' ? 'Accepted' : b.decision === 'Rejected' ? 'Rejected' : null; if (!status) bad('Choose Accept or Reject.');
   Object.assign(d, { Status: status, 'Responded By': u.email, 'Responded At': new Date().toISOString(), Response: String(b.note || '').slice(0, 1000) });
   await setRow(URLS.portal, 'tblDisputes', d._i, t.headers.map(k => d[k] ?? ''));
-  await sendMail([d['Raised By']], `Quality dispute ${status.toLowerCase()} – ${d['Agent Name']} – ${d['Chat Date']}`, `<p>Your quality dispute for <b>${esch(d['Agent Name'])}</b> (chat ${esch(d['Chat Date'])}) was <b>${status.toLowerCase()}</b> by ${esch(u.name)}.</p>${d.Response ? `<p>${esch(d.Response)}</p>` : ''}<p>Details are in the portal: Quality tab.</p>`);
   qCache = null; return { ok: true };
 }
 
