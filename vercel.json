@@ -1,4 +1,5 @@
 {
+  "functions": { "api/index.js": { "maxDuration": 60 } },
   "rewrites": [
     { "source": "/api/setup", "destination": "/api?r=setup" },
     { "source": "/api/callback", "destination": "/api?r=callback" }
