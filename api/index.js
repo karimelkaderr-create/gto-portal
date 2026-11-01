@@ -359,7 +359,8 @@ async function ensureAccessColumn(acc, col) {
 async function qualityFiles() {
   await ensureTable(URLS.portal, 'Quality Files', 'tblQualityFiles', QFILE_HEADERS, [['Oct 2026', DEFAULT_QUALITY_URL]]);
   const t = await table(URLS.portal, 'tblQualityFiles');
-  return t.rows.filter(r => String(r['File Link'] || '').startsWith('https://')).map(r => ({ month: String(r.Month || '').trim() || 'Month', url: String(r['File Link']).trim() }));
+  const label = m => { const d = typeof m === 'number' ? serialToDate(m) : null; return d ? d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : (String(m || '').trim() || 'Month'); };
+  return t.rows.filter(r => String(r['File Link'] || '').startsWith('https://')).map(r => ({ month: label(r.Month), url: String(r['File Link']).trim() }));
 }
 const pct = v => { const n = typeof v === 'number' ? v : parseFloat(String(v).replace('%', '')) / (String(v).includes('%') ? 100 : 1); return isNaN(n) ? null : n; };
 function lev1(a, b) { if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, e = 0; while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++e > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } } return e + (a.length - i) + (b.length - j) <= 1; }
