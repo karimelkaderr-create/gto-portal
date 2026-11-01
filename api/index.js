@@ -18,7 +18,8 @@ const BALANCE_SHEET = process.env.BALANCE_SHEET || 'Balance';
 const T = { access: 'tblAccess', att: 'tblAttendance', req: 'tblRequests', set: 'tblSettings', swap: 'tblSwaps' };
 const ROLES = ['Agent', 'Team Leader', 'Duty Manager', 'General Manager', 'HR'];
 const MANAGER_ROLES = ['Team Leader', 'Duty Manager', 'General Manager', 'HR'];
-const SCOPE = 'offline_access openid profile https://graph.microsoft.com/User.Read https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Mail.Send';
+// '.default' = every Graph permission the admin has approved for the app (Files.ReadWrite.All, User.Read, and Mail.Send once approved)
+const SCOPE = 'offline_access openid profile https://graph.microsoft.com/.default';
 
 /* ---------------- helpers ---------------- */
 const pad = n => String(n).padStart(2, '0');
