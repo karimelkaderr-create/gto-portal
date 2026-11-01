@@ -459,12 +459,18 @@ function buildRotaIndex(accessRows, rotaPeople){
     for (const rp of rotaPeople){ const sc = rotaScore(person, rp, weight); if (sc>bs){bs=sc;best=rp;tie=false;} else if (sc && sc===bs && rp!==best) tie=true; }
     if (best && !tie){ idx.set(key, best); const c = claim.get(best)||[]; c.push([key,bs]); claim.set(best,c); }
   }
+  const lost = [];
   for (const [rp, list] of claim){                       // one rota row → one person
     if (list.length<2) continue;
     list.sort((a,b)=>b[1]-a[1]);
     const keep = list[0][1] > list[1][1] ? list[0][0] : null;
-    list.forEach(([k])=>{ if (k!==keep && !norm(accessRows.find(p=>(p.Email||p['Full Name'])===k)?.['Rota Name'])) idx.delete(k); });
+    list.forEach(([k])=>{ if (k!==keep && !norm(accessRows.find(p=>(p.Email||p['Full Name'])===k)?.['Rota Name'])){ idx.delete(k); lost.push(k); } });
   }
+  // whoever lost a shared row tries their next-best row that nobody else has taken
+  const taken = new Set(idx.values());
+  for (const k of lost){ const person = accessRows.find(p=>(p.Email||p['Full Name'])===k); let best=null, bs=0, tie=false;
+    for (const rp of rotaPeople){ if (taken.has(rp)) continue; const sc = rotaScore(person, rp, weight); if (sc>bs){bs=sc;best=rp;tie=false;} else if (sc && sc===bs && rp!==best) tie=true; }
+    if (best && !tie && bs >= 2.5){ idx.set(k, best); taken.add(best); } }
   return idx;
 }
 function matchRota(person, rotaPeople, idx){
