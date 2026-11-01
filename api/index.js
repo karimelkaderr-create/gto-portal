@@ -87,9 +87,9 @@ async function loadRT() {
   try { r = await get(TOKEN_PATH, { access: 'private', useCache: false }); } catch (e) { if (/not.?found/i.test(e.name + e.message)) return null; throw e; }
   if (!r) return null;
   const body = r.stream ? await new Response(r.stream).text() : typeof r.text === 'function' ? await r.text() : String(r);
-  try { return dec(body).rt; } catch (e) { return null; }
+  try { const o = dec(body); lastSaved = o.at || 0; return o.rt; } catch (e) { return null; }
 }
-let opsCache = null;
+let opsCache = null, lastSaved = 0;
 async function opsToken() {
   if (opsCache && opsCache.exp > Date.now() + 60e3) return opsCache.token;
   const rt = await loadRT();
@@ -97,7 +97,8 @@ async function opsToken() {
   const r = await fetch(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`, { method: 'POST', body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: SECRET, grant_type: 'refresh_token', refresh_token: rt, scope: SCOPE }) });
   const j = await r.json();
   if (!r.ok) throw new HttpError(503, 'The portal lost its connection to the Excel files (' + (j.error || r.status) + '). The opsportal account needs to run setup again.');
-  if (j.refresh_token && j.refresh_token !== rt) await saveRT(j.refresh_token);
+  // Microsoft rotates the refresh token each time; older ones stay valid, so only store a new one once a day (keeps storage use tiny)
+  if (j.refresh_token && j.refresh_token !== rt && Date.now() - lastSaved > 24 * 3600e3) { await saveRT(j.refresh_token); lastSaved = Date.now(); }
   opsCache = { token: j.access_token, exp: Date.now() + j.expires_in * 1000 };
   return opsCache.token;
 }
