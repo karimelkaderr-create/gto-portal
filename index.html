@@ -1,0 +1,1330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GTO Portal</title>
+<link rel="icon" href="gto-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0E1013;--ink:#F1EDE4;--muted:#A9A69E;--faint:#77756F;
+  --glass:rgba(255,255,255,.055);--glass-2:rgba(255,255,255,.085);--glass-hi:rgba(255,255,255,.12);
+  --edge:rgba(255,255,255,.10);--edge-2:rgba(255,255,255,.16);
+  --gold:#E3B95A;--gold-2:#B8892F;--gold-ink:#241A06;--gold-grad:linear-gradient(135deg,#F8E19A 0%,#E2B652 45%,#B98A2F 100%);
+  --ok:#62D394;--ok-soft:rgba(98,211,148,.14);--bad:#FF8A80;--bad-soft:rgba(255,138,128,.14);--warn:#F4C55B;--warn-soft:rgba(244,197,91,.14);--info:#86C8EC;--info-soft:rgba(134,200,236,.13);
+  --r:16px;--focus:0 0 0 3px rgba(227,185,90,.45);--blur:saturate(140%) blur(18px);
+  /* aliases used by older inline styles */
+  --line:var(--edge);--paper:var(--glass);--soft:var(--glass-2);--petrol:#15181D;--petrol-2:rgba(255,255,255,.08);--petrol-3:rgba(255,255,255,.14);--on-petrol:var(--ink);--on-petrol-2:var(--muted);--amber:var(--gold);--amber-ink:var(--gold-ink);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;
+  background:
+    radial-gradient(900px 520px at 88% -8%, rgba(227,185,90,.20), transparent 62%),
+    radial-gradient(700px 600px at 8% 105%, rgba(70,110,140,.22), transparent 60%),
+    radial-gradient(600px 400px at 45% 40%, rgba(227,185,90,.05), transparent 70%),
+    var(--bg);
+  background-attachment:fixed}
+button,input,select,textarea{font:inherit;color:inherit}
+select option{background:#1B1E23;color:var(--ink)}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:8px}
+.num,.b-v,.stat,.clockface{font-family:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.glass,.card,.metrics,.side,.board,.tablewrap,.counts,.week,.req,.modal .card,.toast,.mtop,.demo{backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
+
+/* shell */
+.shell{display:grid;grid-template-columns:256px 1fr;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;align-self:start;display:flex;flex-direction:column;padding:22px 16px;background:rgba(12,13,16,.55);border-right:1px solid var(--edge)}
+.brand{display:flex;align-items:center;gap:12px;padding:0 6px 28px}
+.brand img{width:52px;height:52px;border-radius:50%;box-shadow:0 0 0 1px rgba(227,185,90,.35),0 6px 22px rgba(227,185,90,.18)}
+.brand .bt{line-height:1.2}.brand .bt b{display:block;font:600 15px/1.15 Cinzel,serif;letter-spacing:.6px;color:var(--gold)}.brand .bt span{font-size:12.5px;color:var(--muted)}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav button{display:flex;align-items:center;gap:12px;background:none;border:1px solid transparent;color:var(--muted);padding:11px 12px;border-radius:12px;cursor:pointer;font-weight:500;text-align:left;position:relative}
+.nav button svg{width:19px;height:19px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nav button:hover{background:var(--glass);color:var(--ink)}
+.nav button.on{background:linear-gradient(135deg,rgba(227,185,90,.18),rgba(227,185,90,.06));border-color:rgba(227,185,90,.32);color:#fff}
+.nav button.on svg{stroke:var(--gold)}
+.nav .badge{margin-left:auto;background:var(--gold-grad);color:var(--gold-ink);border-radius:999px;font-size:12px;font-weight:700;min-width:22px;text-align:center;padding:0 6px}
+.me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--edge);border-radius:14px;background:var(--glass)}
+.av{width:36px;height:36px;border-radius:50%;background:var(--gold-grad);color:var(--gold-ink);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.me .who{min-width:0;flex:1}.me .who b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}.me .who span{font-size:12.5px;color:var(--muted)}
+.me button{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}.me button:hover{color:var(--gold)}
+.mtop{display:none}
+.mainwrap{min-width:0}
+.demo{background:rgba(244,197,91,.10);color:var(--warn);padding:9px 36px;font-size:13.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid rgba(244,197,91,.22)}
+.demo select.i{width:auto;max-width:100%;padding:4px 8px}
+.ph{display:flex;align-items:flex-end;gap:16px;padding:34px 36px 8px;max-width:1300px}
+.ph h1{margin:0;font-size:30px;font-weight:600;letter-spacing:-.4px}
+.ph p{margin:6px 0 0;color:var(--muted)}
+.ph .today{margin-left:auto;color:var(--muted);font-size:14px;white-space:nowrap;padding:7px 14px;border:1px solid var(--edge);border-radius:999px;background:var(--glass)}
+main{max-width:1300px;padding:20px 36px 80px}
+
+/* surfaces */
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.card{background:var(--glass);border:1px solid var(--edge);border-radius:var(--r);padding:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.card h2{margin:0 0 14px;font-size:17px;font-weight:600}
+.card h3{margin:0 0 6px;font-size:13.5px;color:var(--muted);font-weight:500}
+.sec{margin-top:20px}
+.muted{color:var(--muted)}
+.stat{font-size:34px;font-weight:600;line-height:1.1}
+.stat small{font:500 14px "IBM Plex Sans",system-ui,sans-serif;color:var(--muted)}
+
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));background:var(--glass);border:1px solid var(--edge);border-radius:var(--r);overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.metrics .m{padding:20px 24px;border-left:1px solid var(--edge);margin-left:-1px}
+.metrics .m h3{margin:0 0 6px;font-size:13.5px;color:var(--muted);font-weight:500}
+.metrics .m p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.metrics .m.go{cursor:pointer}.metrics .m.go:hover{background:var(--glass-2)}
+.metrics .m.alert-m .stat{color:var(--bad)}
+
+/* agent status bar */
+.statusbar{position:sticky;top:0;z-index:35;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 36px;background:rgba(16,18,22,.72);border-bottom:1px solid var(--edge);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
+.sb-state{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.sb-state .dot{width:11px;height:11px;border-radius:50%;background:var(--faint);flex:none}
+.sb-state b{display:block;font-weight:600;font-size:15px}.sb-state span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statusbar.m-work .dot{background:var(--ok);box-shadow:0 0 0 5px rgba(98,211,148,.18)}
+.statusbar.m-break .dot{background:var(--gold);box-shadow:0 0 0 5px rgba(227,185,90,.2)}
+.statusbar.m-over .dot{background:var(--bad);box-shadow:0 0 0 5px rgba(255,138,128,.2)}.statusbar.m-over .sb-state b{color:var(--bad)}
+.seg{display:inline-flex;padding:4px;gap:4px;border-radius:14px;background:rgba(0,0,0,.28);border:1px solid var(--edge-2)}
+.seg button{display:inline-flex;align-items:center;gap:8px;border:0;background:none;color:var(--muted);padding:9px 18px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14.5px;white-space:nowrap}
+.seg button svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.seg button:hover:not(:disabled):not(.on){color:var(--ink);background:var(--glass-hi)}
+.seg button:disabled{opacity:.35;cursor:not-allowed}
+.seg button.on{opacity:1;cursor:default;color:var(--gold-ink);background:var(--gold-grad);box-shadow:0 4px 16px rgba(227,185,90,.3)}
+.m-work .seg button[data-st="work"].on{background:linear-gradient(135deg,#9FF0C2,#4FC283);color:#08240F;box-shadow:0 4px 16px rgba(98,211,148,.3)}
+.m-out .seg button[data-st="out"].on{background:var(--glass-hi);color:var(--ink);box-shadow:none}
+.seg button.armed{background:var(--bad-soft);color:var(--bad);box-shadow:inset 0 0 0 1px rgba(255,138,128,.5)}
+.board.noact{grid-template-columns:1.3fr 1fr 1.15fr 1fr}
+.board.noact .b-cell:nth-child(4){border-right:0}
+
+/* hero board */
+.board{position:relative;border-radius:22px;display:grid;grid-template-columns:1.3fr 1fr 1.15fr 1fr auto;align-items:stretch;overflow:hidden;
+  background:linear-gradient(140deg,rgba(255,255,255,.10),rgba(255,255,255,.03) 55%),rgba(20,22,27,.55);
+  border:1px solid rgba(227,185,90,.30);box-shadow:0 20px 60px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.10)}
+.board::before{content:"";position:absolute;inset:-40% auto auto -10%;width:55%;height:180%;background:radial-gradient(closest-side,rgba(227,185,90,.18),transparent);pointer-events:none}
+.b-cell{position:relative;padding:24px 26px;border-right:1px solid var(--edge);display:flex;flex-direction:column;gap:4px;min-width:0}
+.b-l{font-size:13px;color:var(--muted)}
+.b-v{font-size:30px;font-weight:600;line-height:1.12;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b-v small{font-size:16px;color:var(--muted);font-weight:500}
+.b-time .b-v{font-size:62px;letter-spacing:1px;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.05}
+.b-s{font-size:13px;color:var(--muted)}
+.board .b-cell:nth-child(3) .b-v{white-space:normal;font-size:26px}
+.b-v .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:10px;vertical-align:middle;background:var(--faint)}
+.board.s-in .b-v .dot{background:var(--ok);box-shadow:0 0 0 5px rgba(98,211,148,.18)}
+.board.s-break .b-v .dot{background:var(--gold);box-shadow:0 0 0 5px rgba(227,185,90,.2)}
+.board.s-over .b-v .dot{background:var(--bad);box-shadow:0 0 0 5px rgba(255,138,128,.2)}
+.board.s-over{border-color:rgba(255,138,128,.45)}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.10);margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--gold-grad);border-radius:3px}
+.bar i.over{background:var(--bad)}
+.b-act{position:relative;padding:20px 24px;display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:210px}
+.bbtn{border:0;border-radius:12px;padding:15px 20px;font-weight:600;font-size:15.5px;cursor:pointer;white-space:nowrap}
+.bbtn.go{background:var(--gold-grad);color:var(--gold-ink);box-shadow:0 8px 24px rgba(227,185,90,.28)}
+.bbtn.go:hover{filter:brightness(1.07)}
+.bbtn.ghost{background:var(--glass);color:#fff;border:1px solid var(--edge-2)}
+.bbtn.ghost:hover{background:var(--glass-hi)}
+.bbtn:disabled{opacity:.5;cursor:wait}
+
+/* controls */
+.btn{border:1px solid var(--edge-2);background:var(--glass);border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--glass-hi)}
+.btn.primary{background:var(--gold-grad);border-color:transparent;color:var(--gold-ink);font-weight:600}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{border-color:rgba(255,138,128,.45);color:var(--bad)}
+.btn.danger:hover{background:var(--bad-soft)}
+.btn.warn{background:var(--gold);color:var(--gold-ink)}
+.btn.big{padding:14px 20px;font-size:16px;border-radius:12px}
+.btn.sm{padding:4px 11px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+label.f{display:block;font-size:13px;color:var(--muted);font-weight:500;margin:14px 0 6px}
+input.i,select.i,textarea.i{width:100%;padding:10px 12px;border:1px solid var(--edge-2);border-radius:10px;background:rgba(0,0,0,.22)}
+input.i::placeholder,textarea.i::placeholder{color:var(--faint)}
+input.i:focus,select.i:focus,textarea.i:focus{border-color:rgba(227,185,90,.6);box-shadow:var(--focus);outline:none}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toolbar .i{width:auto}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--edge);vertical-align:middle}
+th{font-size:12.5px;color:var(--muted);font-weight:600;background:rgba(22,24,29,.92);position:sticky;top:0;z-index:1;white-space:nowrap}
+tbody tr:hover td{background:rgba(255,255,255,.03)}
+.tablewrap{overflow:auto;max-height:68vh;border:1px solid var(--edge);border-radius:12px;background:rgba(0,0,0,.14)}
+.tablewrap table tr:last-child td{border-bottom:0}
+
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--glass-2);border:1px solid var(--edge);border-radius:8px;padding:1px 9px;font-size:12.5px;margin:2px 4px 2px 0;white-space:nowrap}
+.chip.ok,.chip.bad,.chip.warn,.chip.info{border-color:transparent}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.info{background:var(--info-soft);color:var(--info)}
+.chip.ok::before,.chip.bad::before,.chip.warn::before,.chip.info::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.alert{border-radius:12px;padding:13px 16px;margin-bottom:18px;border:1px solid currentColor;border-left-width:4px}
+.alert.bad{background:var(--bad-soft);color:var(--bad)}
+.alert.warn{background:var(--warn-soft);color:var(--warn)}
+.alert.ok{background:var(--ok-soft);color:var(--ok)}
+.alert.info{background:var(--info-soft);color:var(--info)}
+
+.counts{display:flex;flex-wrap:wrap;border:1px solid var(--edge);border-radius:12px;overflow:hidden;margin:14px 0;background:var(--glass)}
+.counts div{padding:10px 18px;border-right:1px solid var(--edge);font-size:13px;color:var(--muted)}
+.counts b{display:block;font:600 22px "IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;color:var(--ink)}
+.counts .bad b{color:var(--bad)}.counts .warn b{color:var(--warn)}.counts .ok b{color:var(--ok)}
+
+.req{border:1px solid var(--edge);border-left:3px solid var(--gold);border-radius:12px;padding:16px 18px;margin-bottom:12px;background:var(--glass)}
+.req.flag{border-left-color:var(--bad)}
+
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}
+.cal .dow{font-size:12.5px;color:var(--muted);font-weight:600;padding:0 4px}
+.cal .day{border:1px solid var(--edge);border-radius:10px;min-height:86px;padding:8px;font-size:12px;cursor:pointer;background:rgba(255,255,255,.03);overflow:hidden}
+.cal .day:hover{background:var(--glass-2)}
+.cal .day.out{opacity:.35}
+.cal .day.today{border-color:rgba(227,185,90,.7);box-shadow:inset 0 0 0 1px rgba(227,185,90,.5)}
+.cal .day .n{font:600 15px "IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif}
+.cal .day .tot{float:right;font:600 13px "IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;background:rgba(227,185,90,.18);color:var(--gold);border-radius:6px;padding:0 7px}
+.cal .day.hi .tot{background:var(--bad-soft);color:var(--bad)}
+.datechips label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--edge-2);border-radius:9px;padding:4px 10px;margin:3px;font-size:13px;cursor:pointer;background:var(--glass)}
+.datechips label:has(input:checked){border-color:rgba(227,185,90,.55);background:rgba(227,185,90,.12)}
+input[type=checkbox]{accent-color:var(--gold)}
+
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--edge);border-radius:var(--r);overflow:hidden;background:var(--glass)}
+.week>div{padding:13px 15px;border-left:1px solid var(--edge);margin-left:-1px;min-width:0}
+.week span{display:block;font-size:12.5px;color:var(--muted)}
+.week b{display:block;font:600 16px "IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.week>div.off b{color:var(--faint);font-weight:500}
+.week>div.today{background:linear-gradient(160deg,rgba(227,185,90,.22),rgba(227,185,90,.06))}.week>div.today b{color:var(--gold)}
+.swaptag{display:block;font-style:normal;font-size:11.5px;color:var(--info);margin-top:2px}
+
+.sched td.off{color:var(--faint)}
+.sched td.today{background:rgba(227,185,90,.08)}
+.modal{position:fixed;inset:0;background:rgba(5,6,8,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;backdrop-filter:blur(4px)}
+.modal .card{max-width:680px;width:100%;max-height:90vh;overflow:auto;background:rgba(28,31,37,.85);border-color:var(--edge-2)}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:rgba(28,31,37,.85);color:#fff;padding:11px 20px;border-radius:12px;z-index:60;font-weight:500;border:1px solid rgba(227,185,90,.4)}
+.center{text-align:center}
+.loading{padding:70px;text-align:center;color:var(--muted)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+
+@media (max-width:1150px){.board,.board.noact{grid-template-columns:1fr 1fr}.b-time{grid-column:1/-1}.board .b-cell:nth-child(4){grid-column:1/-1;border-right:0}.b-act{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;border-top:1px solid var(--edge)}.b-act .bbtn{flex:1}.b-cell{border-bottom:1px solid var(--edge)}}
+@media (max-width:820px){
+  .shell{grid-template-columns:1fr}
+  .side{position:fixed;bottom:10px;top:auto;left:10px;right:10px;height:auto;padding:6px;z-index:40;flex-direction:row;border:1px solid var(--edge-2);border-radius:18px;background:rgba(18,20,24,.78)}
+  .side .brand,.side .me{display:none}
+  .nav{flex-direction:row;width:100%;justify-content:space-around;gap:2px}
+  .nav button{flex-direction:column;gap:3px;font-size:11.5px;padding:7px 4px;flex:1;align-items:center;border-radius:12px}
+  .nav .badge{position:absolute;top:2px;right:calc(50% - 24px);margin:0;font-size:10.5px;min-width:18px}
+  .mtop{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(12,13,16,.6);border-bottom:1px solid var(--edge);position:sticky;top:0;z-index:30}
+  .mtop img{width:36px;height:36px;border-radius:50%}
+  .mtop b{font:600 14px Cinzel,serif;color:var(--gold);letter-spacing:.5px}
+  .mtop .av{margin-left:auto;width:32px;height:32px}
+  .ph{padding:22px 16px 4px}.ph h1{font-size:24px}.ph .today{display:none}
+  main{padding:14px 16px 110px}
+  .demo{padding:8px 16px}
+  .b-time .b-v{font-size:48px}.b-v{font-size:24px;white-space:normal}.b-cell{padding:16px 18px}
+  .week{grid-template-columns:1fr}.week>div{display:flex;justify-content:space-between;align-items:center;border-left:0;margin-left:0;border-top:1px solid var(--edge);margin-top:-1px;flex-wrap:wrap}.week span{font-size:14px}.swaptag{width:100%;text-align:right}
+  .cal .day{min-height:58px;padding:5px}.cal .day div{display:none}
+  .toast{bottom:96px}
+  .statusbar{top:61px;padding:10px 16px;gap:10px}
+  .sb-state{flex-basis:100%}
+  .seg{width:100%}.seg button{flex:1;justify-content:center;padding:10px 6px}
+  .board.noact{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.card,.metrics,.week,.req{background:#1A1D22}.side{background:#121418}}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Loading GTO portal…</div></div>
+<script>
+/* =========================================================================
+   SETTINGS – fill these in once (see setup guide)
+   ========================================================================= */
+const CONFIG = {
+  clientId: 'b57c476e-4a3e-498c-a114-2aa2638997d0',   // Entra app "GTO Operations Portal"
+  tenantId: '082517b5-3937-4f49-87e1-9a3dec0551bd',   // InHouse World
+  apiBase: '/api',                                     // the portal server (Vercel); the Excel files are only opened by the server
+  portalDataUrl: '',
+  leavesTrackerUrl: 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/karim_abdelkader_gto_org_uk/IQAGYUtqR1vLSKqP0FlZ6RATAdBiU8BgwfIHE4l4MyEuylk',
+  rotaUrl: 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCsgxuG2GMfQrdxchuLp-g-AUXcRe-tUdm0up6CarphlSA',
+  trackerTable: 'Table1',
+  balanceSheet: 'Balance',
+};
+const DEMO = !CONFIG.clientId || new URLSearchParams(location.search).has('demo');
+const LOGO = 'data:image/webp;base64,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';
+
+/* ============================ helpers ============================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const dkey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y,m-1,d); };
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const mondayOf = d => { const x = new Date(d.getFullYear(),d.getMonth(),d.getDate()); const w = (x.getDay()+6)%7; return addDays(x,-w); };
+const hm = d => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : '';
+const fmtDate = k => { if(!k) return ''; const d = typeof k==='string'?fromKey(k):k; return d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}); };
+const fmtMins = m => { if(m==null||isNaN(m)) return ''; m=Math.round(m); const s=m<0?'-':''; m=Math.abs(m); return s+(m>=60?`${Math.floor(m/60)}h ${pad(m%60)}m`:`${m}m`); };
+const serialToDate = n => { const ms = Math.round((n - 25569) * 864e5); const u = new Date(ms); return new Date(u.getUTCFullYear(),u.getUTCMonth(),u.getUTCDate()); };
+const dateToSerial = d => (Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()) - Date.UTC(1899,11,30)) / 864e5;
+function parseDateCell(v){
+  if (v==null || v==='') return null;
+  if (typeof v === 'number') return v > 20000 && v < 80000 ? serialToDate(v) : null;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return new Date(+m[1],+m[2]-1,+m[3]);
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) return new Date(m[3].length===2?2000+ +m[3]:+m[3], +m[2]-1, +m[1]);
+  if (/^\d+(\.\d+)?$/.test(s)) return parseDateCell(Number(s));
+  const t = Date.parse(s); return isNaN(t) ? null : new Date(new Date(t).setHours(0,0,0,0));
+}
+const norm = s => String(s??'').replace(/\u00a0|\u202f/g,' ').toLowerCase().replace(/\(.*?\)/g,m=>' '+m.slice(1,-1)+' ').replace(/[^a-z\u0600-\u06ff ]+/g,' ').replace(/\s+/g,' ').trim();
+const normEmail = s => String(s??'').trim().toLowerCase();
+const uid = p => p + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
+const yes = v => /^y(es)?$/i.test(String(v??'').trim()) || v===true;
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
+function rowsToObjects(values){ const h = values[0].map(x=>String(x??'').trim()); return { headers:h, rows: values.slice(1).map((r,i)=>{ const o={_i:i}; h.forEach((k,j)=>o[k]=r[j]); return o; }) }; }
+
+const ROLES = ['Agent','Team Leader','Duty Manager','General Manager','HR'];
+const LEAVE_TYPES_ALL = ['Holiday','Emergency','UPL','Sick'];
+const LEAVE_LABEL = {Holiday:'PTO (Holiday)',Emergency:'Emergency',UPL:'UPL',Sick:'Sick'};
+const isMgr = u => u && u.role !== 'Agent';
+const canRaiseForOthers = u => ['Team Leader','Duty Manager','General Manager'].includes(u.role);
+
+/* ============================ shift text ============================ */
+function parseShift(text){
+  const s = String(text||'');
+  const m = s.match(/(\d{1,2})\s*[:.]\s*(\d{2})\s*-\s*(\d{1,2})\s*[:.]?\s*(\d{2})/);
+  if (!m) return null;
+  const start = (+m[1])*60 + (+m[2]); let end = (+m[3])*60 + (+m[4]);
+  if (end <= start) end += 1440;
+  return { start, end, label: `${pad(m[1])}:${m[2]}–${pad(m[3])}:${m[4]}` };
+}
+
+/* ============================ rota parsing ============================ */
+const DAYRX = /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?\s+(\d{1,2})\s*\/\s*(\d{1,2})/i;
+function parseRotaSheet(grid, weekStart){
+  const people = []; const seen = new Set();
+  const H = grid.length;
+  for (let r=0;r<H;r++){
+    const row = grid[r]||[];
+    for (let c=1;c<row.length;c++){
+      if (!DAYRX.test(String(row[c]||'').trim()) || DAYRX.test(String(row[c-1]||'').trim())) continue;
+      // run of day headers starting at c
+      let n=0; while (n<7 && DAYRX.test(String(row[c+n]||'').trim())) n++;
+      if (n<5) continue;
+      const rawLabel = String(row[c-1]||'').trim();
+      const label = /^agent name$/i.test(rawLabel)?'Agents':/^tl\s*\/\s*dm$/i.test(rawLabel)?'TL / DM':/^name$/i.test(rawLabel)?'Team':rawLabel.replace(/\s+member$/i,'');
+      if (/^shift$/i.test(rawLabel) || /counter/i.test(rawLabel)) continue;
+      const dates = [];
+      for (let k=0;k<n;k++){ const m = String(row[c+k]).trim().match(DAYRX); dates.push(dateFromDM(+m[2],+m[3],weekStart)); }
+      for (let rr=r+1; rr<H; rr++){
+        const rw = grid[rr]||[]; const name = String(rw[c-1]||'').replace(/\u00a0/g,' ').trim();
+        if (!name) break;
+        if (DAYRX.test(String(rw[c]||'').trim())) break;
+        if (/counter|^total$|^shift$/i.test(name)) break;
+        const days = {};
+        dates.forEach((d,k)=>{ days[dkey(d)] = String(rw[c+k]??'').replace(/\u00a0/g,' ').trim(); });
+        const key = norm(name)+'|'+label;
+        if (seen.has(key)) continue; seen.add(key);
+        people.push({ name, team: label || 'Team', days });
+      }
+    }
+  }
+  return people;
+}
+function dateFromDM(d, m, near){
+  const base = near || new Date();
+  let best=null, bd=1e15;
+  for (const y of [base.getFullYear()-1, base.getFullYear(), base.getFullYear()+1]){
+    const x = new Date(y,m-1,d); const diff = Math.abs(x-base); if (diff<bd){bd=diff;best=x;}
+  }
+  return best;
+}
+function sheetWeekStart(name){
+  const m = String(name).match(/(\d{1,2})\s*\.\s*(\d{1,2})/); if (!m) return null;
+  const d = dateFromDM(+m[1], +m[2], new Date());
+  return d;
+}
+function tokEq(a,b){ if (a===b) return true; if (a.length<4||b.length<4||Math.abs(a.length-b.length)>1) return false;
+  const m=a.length,n=b.length, d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]); for(let j=1;j<=n;j++) d[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  return d[m][n]<=1; }
+function rotaScore(person, rp){
+  const full = norm(person['Full Name']).split(' ').filter(Boolean); if (!full.length) return 0;
+  const toks = norm(rp.name).split(' ').filter(Boolean);
+  if (!toks.length || toks[0] !== full[0]) return 0;
+  const rest = full.slice(1); let score = 1;
+  for (const t of toks.slice(1)){
+    if (rest.includes(t)) score += 2;
+    else if (rest.some(f=>tokEq(t,f))) score += 1.5;
+    else if (t.length===1 && rest.some(f=>f[0]===t)) score += 1;
+    else if (t.length<=2) continue;                      // el, al …
+    else return 0;
+  }
+  if (toks.join(' ')===full.join(' ')) score += 5;
+  return score;
+}
+function buildRotaIndex(accessRows, rotaPeople){
+  const idx = new Map(); const claim = new Map();
+  for (const person of accessRows){
+    const key = person.Email || person['Full Name'];
+    const override = norm(person['Rota Name']);
+    if (override){ const hit = rotaPeople.find(p=>norm(p.name)===override); if (hit){ idx.set(key, hit); continue; } }
+    let best=null, bs=0, tie=false;
+    for (const rp of rotaPeople){ const sc = rotaScore(person, rp); if (sc>bs){bs=sc;best=rp;tie=false;} else if (sc && sc===bs && rp!==best) tie=true; }
+    if (best && !tie){ idx.set(key, best); const c = claim.get(best)||[]; c.push([key,bs]); claim.set(best,c); }
+  }
+  for (const [rp, list] of claim){                       // one rota row → one person
+    if (list.length<2) continue;
+    list.sort((a,b)=>b[1]-a[1]);
+    const keep = list[0][1] > list[1][1] ? list[0][0] : null;
+    list.forEach(([k])=>{ if (k!==keep && !norm(accessRows.find(p=>(p.Email||p['Full Name'])===k)?.['Rota Name'])) idx.delete(k); });
+  }
+  return idx;
+}
+function matchRota(person, rotaPeople, idx){
+  idx = idx || buildRotaIndex([person], rotaPeople);
+  return idx.get(person.Email || person['Full Name']) || null;
+}
+
+/* ============================ Graph data store ============================ */
+class GraphStore {
+  constructor(getToken){ this.getToken = getToken; this.wb = {}; }
+  async req(method, path, body, tries=0){
+    const token = await this.getToken();
+    const res = await fetch('https://graph.microsoft.com/v1.0'+path, { method, headers:{ Authorization:'Bearer '+token, 'Content-Type':'application/json' }, body: body?JSON.stringify(body):undefined });
+    if ([429,409,503,504].includes(res.status) && tries<4){ await new Promise(r=>setTimeout(r, 800*(tries+1))); return this.req(method,path,body,tries+1); }
+    if (!res.ok){ let t=''; try{ t=(await res.json()).error?.message||''; }catch(e){} throw new Error(`${res.status} ${t||res.statusText} (${path.split('?')[0].slice(0,80)})`); }
+    return res.status===204 ? null : res.json();
+  }
+  async book(url){
+    if (this.wb[url]) return this.wb[url];
+    const direct = url.match(/^https:\/\/([^/]+)(\/personal\/[^/]+)\/Documents\/(.+)$/);
+    if (direct){
+      const site = await this.req('GET', `/sites/${direct[1]}:${direct[2]}?$select=id`);
+      const it = await this.req('GET', `/sites/${site.id}/drive/root:/${direct[3].split('/').map(encodeURIComponent).join('/')}?$select=id,parentReference`);
+      return this.wb[url] = `/drives/${it.parentReference.driveId}/items/${it.id}/workbook`;
+    }
+    const clean = url.split('?')[0];
+    const enc = 'u!' + btoa(unescape(encodeURIComponent(clean))).replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
+    const it = await this.req('GET', `/shares/${enc}/driveItem?$select=id,parentReference`);
+    return this.wb[url] = `/drives/${it.parentReference.driveId}/items/${it.id}/workbook`;
+  }
+  async table(url, name){ const b = await this.book(url); const r = await this.req('GET', `${b}/tables/${encodeURIComponent(name)}/range?$select=values`); return rowsToObjects(r.values); }
+  async tableTail(url, name, maxRows){
+    const b = await this.book(url);
+    const hdr = await this.req('GET', `${b}/tables/${encodeURIComponent(name)}/headerRowRange?$select=values,address`);
+    const body = await this.req('GET', `${b}/tables/${encodeURIComponent(name)}/dataBodyRange?$select=address,rowCount`);
+    const m = body.address.match(/!([A-Z]+)(\d+):([A-Z]+)(\d+)/);
+    const sheet = body.address.split('!')[0].replace(/^'|'$/g,'');
+    const first=+m[2], last=+m[4]; const start = Math.max(first, last-maxRows+1);
+    const r = await this.req('GET', `${b}/worksheets('${encodeURIComponent(sheet)}')/range(address='${m[1]}${start}:${m[3]}${last}')?$select=values`);
+    const out = rowsToObjects([hdr.values[0], ...r.values]);
+    out.rows.forEach(o=>o._i += (start-first));
+    return out;
+  }
+  async addRow(url, name, values){ const b = await this.book(url); return this.req('POST', `${b}/tables/${encodeURIComponent(name)}/rows/add`, { values:[values] }); }
+  async setRow(url, name, index, values){
+    const b = await this.book(url);
+    const body = await this.req('GET', `${b}/tables/${encodeURIComponent(name)}/dataBodyRange?$select=address`);
+    const m = body.address.match(/^(.*)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+    const sheet = m[1].replace(/^'|'$/g,'').replace(/''/g,"'"); const row = +m[3] + index;
+    return this.req('PATCH', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g,"''"))}')/range(address='${m[2]}${row}:${m[4]}${row}')`, { values:[values] });
+  }
+  async sheetNames(url){ const b = await this.book(url); const r = await this.req('GET', `${b}/worksheets?$select=name`); return r.value.map(w=>w.name); }
+  async sheetText(url, sheet){ const b = await this.book(url); const r = await this.req('GET', `${b}/worksheets('${encodeURIComponent(sheet)}')/usedRange(valuesOnly=true)?$select=text,address`);
+    const m = r.address.match(/!([A-Z]+)(\d+)/); const colOff = colNum(m[1])-1, rowOff = +m[2]-1;
+    const grid = []; for(let i=0;i<rowOff;i++) grid.push([]);
+    r.text.forEach(row=>grid.push([...Array(colOff).fill(''), ...row])); return grid; }
+  async sheetValues(url, sheet){ const b = await this.book(url); const r = await this.req('GET', `${b}/worksheets('${encodeURIComponent(sheet)}')/usedRange(valuesOnly=true)?$select=values`); return r.values; }
+}
+function colNum(s){ let n=0; for (const ch of s) n = n*26 + (ch.charCodeAt(0)-64); return n; }
+
+/* ============================ Data layer ============================ */
+const T = { access:'tblAccess', att:'tblAttendance', req:'tblRequests', set:'tblSettings', swap:'tblSwaps' };
+class Data {
+  constructor(store){ this.s = store; this.cache = {}; }
+  async access(force){
+    if (this.cache.access && !force) return this.cache.access;
+    const t = await this.s.table(CONFIG.portalDataUrl, T.access);
+    t.rows = t.rows.filter(r=>r.Email || r['Full Name']);
+    t.rows.forEach(r=>{ r.Email = normEmail(r.Email); r['Manager Email']=normEmail(r['Manager Email']); r['Portal Role']=String(r['Portal Role']||'').trim(); });
+    // team leader by name -> manager email
+    const byName = new Map(t.rows.map(r=>[norm(r['Full Name']), r])); t.rows.forEach(r=>{ if (r['Roster Name']) byName.set(norm(r['Roster Name']), byName.get(norm(r['Roster Name']))||r); });
+    t.rows.forEach(r=>{ const tl = r['Team Leader'] ? byName.get(norm(r['Team Leader'])) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader']||''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
+    return this.cache.access = t;
+  }
+  async settings(){
+    if (this.cache.settings) return this.cache.settings;
+    const t = await this.s.table(CONFIG.portalDataUrl, T.set); const o = {BreakMinutes:60,EmergencyLimit:6,LateGraceMinutes:5,LeaveYear:new Date().getFullYear()};
+    t.rows.forEach(r=>{ if (r.Key) o[String(r.Key).trim()] = isNaN(+r.Value)?r.Value:+r.Value; });
+    return this.cache.settings = o;
+  }
+  async attendance(force){
+    if (this.cache.att && !force) return this.cache.att;
+    const t = await this.s.tableTail(CONFIG.portalDataUrl, T.att, 20000);
+    t.rows = t.rows.filter(r=>r.ID).map(r=>({...r, Email:normEmail(r.Email), 'Shift Date': toKey(r['Shift Date']), ts: parseTs(r.Timestamp)}));
+    return this.cache.att = t;
+  }
+  async addAttendance(o){
+    const h = (await this.attendanceHeaders());
+    const vals = h.map(k=>o[k]??'');
+    await this.s.addRow(CONFIG.portalDataUrl, T.att, vals);
+    if (this.cache.att) this.cache.att.rows.push({...o, ts:new Date(o.Timestamp)});
+  }
+  async attendanceHeaders(){ if (!this.cache.att) await this.attendance(); return this.cache.att.headers; }
+  async requests(force){
+    if (this.cache.req && !force) return this.cache.req;
+    const t = await this.s.table(CONFIG.portalDataUrl, T.req);
+    t.rows = t.rows.filter(r=>r.ID);
+    t.rows.forEach(r=>{ r.Email=normEmail(r.Email); r['Submitted By']=normEmail(r['Submitted By']); r.dateList = String(r.Dates||'').split(/[,\s]+/).filter(Boolean); });
+    return this.cache.req = t;
+  }
+  async addRequest(o){ const t = await this.requests(); await this.s.addRow(CONFIG.portalDataUrl, T.req, t.headers.map(k=>o[k]??'')); await this.requests(true); }
+  async updateRequest(id, patch){
+    const t = await this.requests(true); const r = t.rows.find(x=>x.ID===id); if (!r) throw new Error('Request not found');
+    Object.assign(r, patch);
+    await this.s.setRow(CONFIG.portalDataUrl, T.req, r._i, t.headers.map(k=>k==='Dates'?r.dateList.join(', '):(r[k]??'')));
+  }
+  async updateAccess(row){ const t = await this.access(); await this.s.setRow(CONFIG.portalDataUrl, T.access, row._i, t.headers.map(k=>row[k]??'')); }
+  async addAccess(row){ const t = await this.access(); await this.s.addRow(CONFIG.portalDataUrl, T.access, t.headers.map(k=>row[k]??'')); await this.access(true); }
+  async tracker(force){
+    if (this.cache.tr && !force) return this.cache.tr;
+    const t = await this.s.table(CONFIG.leavesTrackerUrl, CONFIG.trackerTable);
+    const H = t.headers; const col = n => H.find(h=>h.toLowerCase()===n.toLowerCase());
+    const cN=col('Name'), cV=col('Vacation Date'), cR=col('Role'), cT=col('Leave type'), cS=col('Status'), cB=col('Requested by'), cC=col('Additional Comment');
+    t.items = t.rows.filter(r=>r[cN] && String(r[cN]).trim()).map(r=>{
+      const d = parseDateCell(r[cV]); let type = String(r[cT]||'').trim(); if (/^sick/i.test(type)) type='Sick';
+      const status = String(r[cS]||'').trim();
+      return { _i:r._i, name:String(r[cN]), n:norm(r[cN]), date: d?dkey(d):null, role:String(r[cR]||'').trim(), type, status, by:String(r[cB]||''), comment:String(r[cC]||''),
+        approved: /^approved/i.test(status) && !/cancel/i.test(status), pending: status==='', cancelled: /cancel|reject/i.test(status) || /cancel/i.test(type) };
+    });
+    return this.cache.tr = t;
+  }
+  async appendTracker(entries){
+    const t = await this.tracker(true); const H = t.headers;
+    let lastFilled = -1; t.rows.forEach(r=>{ if (H.some(h=>r[h]!==''&&r[h]!=null)) lastFilled = r._i; });
+    let next = lastFilled+1; const total = t.rows.length;
+    for (const e of entries){
+      const vals = H.map(h=>{ const k=h.toLowerCase(); return k==='date'?dateToSerial(new Date()):k==='vacation date'?dateToSerial(fromKey(e.date)):k==='name'?e.name:k==='role'?e.role:k==='requested by'?e.by:k==='leave type'?e.type:k==='status'?'Approved ':k==='additional comment'?e.comment:''; });
+      if (next < total) await this.s.setRow(CONFIG.leavesTrackerUrl, CONFIG.trackerTable, next, vals);
+      else await this.s.addRow(CONFIG.leavesTrackerUrl, CONFIG.trackerTable, vals);
+      next++;
+    }
+    this.cache.tr = null;
+  }
+  async balance(){
+    if (this.cache.bal) return this.cache.bal;
+    const v = await this.s.sheetValues(CONFIG.leavesTrackerUrl, CONFIG.balanceSheet);
+    const h = v[0].map(x=>String(x??'').trim().toLowerCase());
+    const last = n => h.lastIndexOf(n);
+    const cA=last('agent'), cAl=last('allowance'), cS=last('start date'), cAs=last('allowance start date');
+    const out = {};
+    v.slice(1).forEach(r=>{ if (r[cA]) out[norm(r[cA])] = { allowance: +r[cAl]||0, start: parseDateCell(r[cS]), allowanceStart: parseDateCell(r[cAs]) }; });
+    return this.cache.bal = out;
+  }
+  async rotaWeeks(){
+    if (this.cache.weeks) return this.cache.weeks;
+    const names = await this.s.sheetNames(CONFIG.rotaUrl);
+    const w = names.map(n=>({name:n, start:sheetWeekStart(n)})).filter(x=>x.start && /^w[kc]/i.test(x.name.trim())).sort((a,b)=>a.start-b.start);
+    return this.cache.weeks = w;
+  }
+  async rotaFor(date){
+    const weeks = await this.rotaWeeks(); if (!weeks.length) return null;
+    let pick = null; for (const w of weeks){ if (w.start <= date) pick = w; }
+    if (!pick || (date - pick.start) > 13*864e5) return null;
+    this.cache.rota = this.cache.rota || {};
+    if (!this.cache.rota[pick.name]){ const g = await this.s.sheetText(CONFIG.rotaUrl, pick.name); this.cache.rota[pick.name] = { week: pick, people: parseRotaSheet(g, pick.start) }; }
+    return this.cache.rota[pick.name];
+  }
+  async swaps(force){
+    if (this.cache.sw && !force) return this.cache.sw;
+    let t; try { t = await this.s.table(CONFIG.portalDataUrl, T.swap); } catch(e){ t = { headers:[], rows:[], missing:true }; }
+    t.rows = t.rows.filter(r=>r.ID); t.rows.forEach(r=>{ r['Requester Email']=normEmail(r['Requester Email']); r['Teammate Email']=normEmail(r['Teammate Email']); r['Requester Date']=toKey(r['Requester Date']); r['Teammate Date']=toKey(r['Teammate Date']); });
+    this.cache.ov = null; return this.cache.sw = t;
+  }
+  async addSwap(o){ const t = await this.swaps(); if (t.missing) throw new Error('The data file has no "Swaps" table yet. Use the latest GTO Portal Data.xlsx.'); await this.s.addRow(CONFIG.portalDataUrl, T.swap, t.headers.map(k=>o[k]??'')); await this.swaps(true); }
+  async updateSwap(id, patch){ const t = await this.swaps(true); const r = t.rows.find(x=>x.ID===id); if (!r) throw new Error('Swap not found'); Object.assign(r, patch); await this.s.setRow(CONFIG.portalDataUrl, T.swap, r._i, t.headers.map(k=>r[k]??'')); await this.swaps(true); }
+  async overrides(){
+    if (this.cache.ov) return this.cache.ov;
+    const sw = (await this.swaps()).rows.filter(r=>r.Status==='Approved'); const acc = (await this.access()).rows; const ov = new Map();
+    for (const r of sw){
+      const A = acc.find(x=>x.Email===r['Requester Email']), B = acc.find(x=>x.Email===r['Teammate Email']); if (!A||!B) continue;
+      for (const d of [...new Set([r['Requester Date'], r['Teammate Date']])]){
+        const date = fromKey(d); const a = (await this.baseShift(A,date)).text, b = (await this.baseShift(B,date)).text;
+        ov.set(A.Email+'|'+d, { text:b, swap:r, with:B['Full Name'] }); ov.set(B.Email+'|'+d, { text:a, swap:r, with:A['Full Name'] });
+      }
+    }
+    return this.cache.ov = ov;
+  }
+  async shiftFor(person, date){
+    const base = await this.baseShift(person, date);
+    const o = person.Email ? (await this.overrides()).get(person.Email+'|'+dkey(date)) : null;
+    return o ? { ...base, text:o.text, original:base.text, swapWith:o.with } : base;
+  }
+  async baseShift(person, date){
+    const r = await this.rotaFor(date); if (!r) return { text:'', rota:null };
+    if (!r.idx){ const acc = await this.access(); r.idx = buildRotaIndex(acc.rows, r.people); }
+    const p = matchRota(person, r.people, r.idx); return { text: p ? (p.days[dkey(date)]||'') : '', rota:p };
+  }
+}
+function parseTs(v){ if (typeof v==='number') return new Date(Math.round((v-25569)*864e5) + new Date().getTimezoneOffset()*6e4); return new Date(String(v)); }
+function toKey(v){ const d = parseDateCell(v); return d ? dkey(d) : String(v||''); }
+
+
+/* ============================ Server API data layer (live) ============================ */
+class ApiData extends Data {
+  constructor(){ super(null); this.cache = {}; }
+  async call(method, r, body, params, retried){
+    const q = new URLSearchParams({ r, ...(params||{}) });
+    const res = await fetch(`${CONFIG.apiBase}?${q}`, { method, headers:{ Authorization:'Bearer '+await getToken(retried), 'Content-Type':'application/json' }, body: body?JSON.stringify(body):undefined });
+    if (res.status===401 && !retried) return this.call(method, r, body, params, true);
+    let j={}; try { j = await res.json(); } catch(e){}
+    if (!res.ok){ const e = new Error(j.error || `Server error ${res.status}`); e.status=res.status; throw e; }
+    return j;
+  }
+  absorb(d){
+    if (d.me) this.me = d.me;
+    if (d.access) this.cache.access = d.access;
+    if (d.settings) this.cache.settings = d.settings;
+    if (d.attendance){ d.attendance.rows.forEach(r=>r.ts=new Date(r.Timestamp)); this.cache.att = d.attendance; }
+    if (d.requests) this.cache.req = d.requests;
+    if (d.swaps){ this.cache.sw = d.swaps; this.cache.ov = null; }
+    if (d.tracker) this.cache.tr = d.tracker;
+    if (d.balance){ for (const k in d.balance){ const b=d.balance[k]; if (b){ b.start=b.start&&fromKey(b.start); b.allowanceStart=b.allowanceStart&&fromKey(b.allowanceStart); } } this.cache.bal = d.balance; }
+    if (d.weeks) this.cache.weeks = d.weeks.map(w=>({ name:w.name, start:fromKey(w.start) }));
+  }
+  async load(parts){ this.absorb(await this.call('GET','data',null, parts?{parts:parts.join(',')}:null)); }
+  async access(force){ if (force || !this.cache.access) await this.load(['access']); return this.cache.access; }
+  async settings(){ if (!this.cache.settings) await this.load(['settings']); return this.cache.settings; }
+  async attendance(force){ if (force || !this.cache.att) await this.load(['attendance']); return this.cache.att; }
+  async requests(force){ if (force || !this.cache.req) await this.load(['requests']); return this.cache.req; }
+  async swaps(force){ if (force || !this.cache.sw) await this.load(['swaps']); return this.cache.sw; }
+  async tracker(force){ if (force || !this.cache.tr) await this.load(['tracker']); return this.cache.tr; }
+  async balance(){ if (!this.cache.bal) await this.load(['balance']); return this.cache.bal; }
+  async rotaWeeks(){ if (!this.cache.weeks) await this.load(['weeks']); return this.cache.weeks; }
+  async rotaFor(date){
+    const weeks = await this.rotaWeeks(); if (!weeks.length) return null;
+    let pick=null; for (const w of weeks){ if (w.start<=date) pick=w; }
+    if (!pick || (date-pick.start) > 13*864e5) return null;
+    this.cache.rota = this.cache.rota || {};
+    if (!this.cache.rota[pick.name]) this.cache.rota[pick.name] = this.call('GET','rota',null,{sheet:pick.name}).then(r=>({ week:pick, people:r.people }));
+    return await this.cache.rota[pick.name];
+  }
+  async addAttendance(o){ const r = await this.call('POST','att',{ action:o.Action, email:o.Email, shiftDate:o['Shift Date'], ts:o.Timestamp, note:o.Note }); const row=r.row; row.ts=new Date(row.Timestamp); if (this.cache.att) this.cache.att.rows.push(row); }
+  async addRequest(o){ await this.call('POST','req',{ email:o.Email, type:o['Leave Type'], dates:String(o.Dates).split(/[,\s]+/).filter(Boolean), reason:o.Reason }); await this.requests(true); }
+  async updateRequest(id, patch){ if (patch.Status==='Cancelled'){ await this.call('POST','cancel',{id}); await this.requests(true); return; } throw new Error('Not supported'); }
+  async addSwap(o){ await this.call('POST','swap',{ teammate:o['Teammate Email'], myDate:o['Requester Date'], theirDate:o['Teammate Date'], myShift:o['Requester Shift'], theirShift:o['Teammate Shift'], reason:o.Reason }); await this.swaps(true); }
+  async updateSwap(id, patch){ if (patch.Status==='Cancelled') await this.call('POST','swapcancel',{id}); else await this.call('POST','swapdecide',{ id, ok:patch.Status==='Approved', note:patch.Note }); await this.swaps(true); }
+  async updateAccess(row){ await this.call('POST','access',{ row }); await this.access(true); }
+  async addAccess(row){ await this.call('POST','access',{ row:{...row,_i:undefined} }); await this.access(true); }
+}
+
+/* ============================ Demo store (no sign-in) ============================ */
+function demoStore(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const mon = mondayOf(today);
+  const people = [
+    ['gm@gto.demo','Nadia Farouk','General Manager','','Management','Operations Manager'],
+    ['dm1@gto.demo','Karim Demo','Duty Manager','gm@gto.demo','Management','Duty Manager'],
+    ['dm2@gto.demo','Mona Saleh','Duty Manager','gm@gto.demo','Management','Duty Manager'],
+    ['tl1@gto.demo','Hany Adel','Team Leader','dm1@gto.demo','Enquiry','TL- Enquiry'],
+    ['tl2@gto.demo','Rana Fathy','Team Leader','dm1@gto.demo','Reservation','TL- Resv'],
+    ['hr@gto.demo','Laila Hassan','HR','gm@gto.demo','HR','HR'],
+  ];
+  const ag = ['Omar Khaled Mostafa','Salma Ibrahim','Youssef Tarek Amin','Mariam Nabil','Ahmed Samir Ali','Nour Eldin Walid','Farida Ashraf','Mostafa Gamal','Hana Mahmoud','Ziad Hossam','Reem Adel','Tamer Fouad'];
+  ag.forEach((n,i)=>people.push([`agent${i+1}@gto.demo`, n, 'Agent', i<7?'tl1@gto.demo':'tl2@gto.demo', i<7?'Enquiry':'Reservation', i<7?'Enquiry Agent':'Reservation Agent']));
+  const access = [['Email','Full Name','Portal Role','Team Leader','Manager Email','Team','Tracker Role','Rota Name','Portal Admin','Active','Roster Name','Notes'],
+    ...people.map(p=>[p[0],p[1],p[2],(people.find(x=>x[0]===p[3])||[])[1]||'','',p[4],p[5],'',p[0]==='dm1@gto.demo'?'Yes':'No','Yes','',''])];
+  const settings = [['Key','Value','Meaning'],['BreakMinutes',60,''],['EmergencyLimit',6,''],['LateGraceMinutes',5,''],['LeaveYear',today.getFullYear(),'']];
+  // rota: two blocks like the real file
+  const shifts = ['09:00-18:00','12:30-21:30','09:00-18:00/VIP','OFF','12:30-21:30/VIP','OFF/V','21:00-09:00'];
+  const dayHdr = k => { const d = addDays(mon,k); return d.toLocaleDateString('en-GB',{weekday:'long'})+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1); };
+  function rotaGrid(ws){
+    const g = [['Agent name',...[0,1,2,3,4,5,6].map(k=>dayHdr(k)),'','Tl/DM',...[0,1,2,3,4,5,6].map(k=>dayHdr(k))]];
+    const agents = ag.map((n,i)=>[n.split(' ').slice(0,2).join(' '), ...[0,1,2,3,4,5,6].map(k=>{ if ((k+i)%7===5||(k+i)%7===6) return 'OFF'; return i===3&&k===2?'Holiday':shifts[(i+k)%3===2?1:0]; })]);
+    const tls = people.slice(1,5).map((p,i)=>[p[1].split(' ')[0], ...[0,1,2,3,4,5,6].map(k=>(k+i)%7>=5?'OFF':(i%2?'12:30-21:30/TL1':'09:00-18:00/DM'))]);
+    for (let r=0;r<agents.length;r++) g.push([...agents[r],'',...(tls[r]||['','','','','','','',''])]);
+    g.push([]); g.push(['Total Agent Counter']); g.push(['Shift',...[0,1,2,3,4,5,6].map(k=>dayHdr(k))]); g.push(['09:00-18:00','5','5','5','5','5','4','4']);
+    return g;
+  }
+  const weeks = { [`WK ${pad(addDays(mon,-7).getDate())}.${pad(addDays(mon,-7).getMonth()+1)}`]: rotaGrid(), [`WK ${pad(mon.getDate())}.${pad(mon.getMonth()+1)}`]: rotaGrid(), [`WK ${pad(addDays(mon,7).getDate())}.${pad(addDays(mon,7).getMonth()+1)}`]: rotaGrid() };
+  // shift week headers for prev/next
+  Object.keys(weeks).forEach((name,wi)=>{ const off=(wi-1)*7; weeks[name]=weeks[name].map(r=>r.map(c=>{ const m=String(c).match(DAYRX); if(!m) return c; const d=addDays(dateFromDM(+m[2],+m[3],today),off); return d.toLocaleDateString('en-GB',{weekday:'long'})+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1); })); });
+  // tracker rows
+  const tr = [['Date','Vacation Date','Name','Role','Requested by','Leave type','Status','Additional Comment','Column1']];
+  const add = (n,role,k,type,st='Approved ') => tr.push([dateToSerial(today), dateToSerial(addDays(today,k)), n, role, 'Hany Adel', type, st, '', '']);
+  ag.forEach((n,i)=>{ const role=i<7?'Enquiry Agent':'Reservation Agent'; for (let j=0;j<(i%5)+3;j++) add(n,role,-60-j*9-i,'Holiday'); for(let j=0;j<(i===4?7:i===2?6:i%3);j++) add(n,role,-30-j*5,'Emergency'); });
+  add(ag[0],'Enquiry Agent',3,'Holiday'); add(ag[1],'Enquiry Agent',3,'Holiday'); add(ag[8],'Reservation Agent',3,'Holiday'); add(ag[5],'Enquiry Agent',5,'Holiday'); add(ag[6],'Enquiry Agent',10,'Holiday',''); add('Hany Adel','TL- Enquiry',3,'Holiday');
+  for (let i=0;i<40;i++) tr.push(['','','','','','','','','']);
+  const bal = [['Agent','Start date','Allowance start date','End Allowance','','','','','','Agent','','Start date','Allowance start date',' Allowance','Consumed ','Emergencies ','Remaining Allowance']];
+  people.concat().forEach((p,i)=>bal.push(['', '', '', '', '', '', '', '', '', p[1], '', 45000, 45200, 21+(i%3)*2, '', '', '']));
+  // attendance sample: yesterday full shifts
+  const att = [['ID','Email','Name','Shift Date','Action','Timestamp','Recorded By','Note']];
+  const y = addDays(today,-1); const yk = dkey(y);
+  ag.slice(0,9).forEach((n,i)=>{ const e=`agent${i+1}@gto.demo`; const base = new Date(y); base.setHours(9, i%3===0? 12 : 1);
+    const ev=(a,min)=>att.push([uid('A'),e,n,yk,a,new Date(base.getTime()+min*6e4).toISOString(),e,'']);
+    ev('Clock In',0); ev('Break Start',180); ev('Break End',180+(i===2?82:55)); ev('Clock Out', i===5?470:540); });
+  const reqs = [['ID','Submitted At','Email','Name','Tracker Role','Leave Type','Dates','Days','Reason','Submitted By','Status','Stage 1 By','Stage 1 At','Stage 1 Note','Stage 2 By','Stage 2 At','Stage 2 Note','Written To Tracker'],
+    ['RDEMO1', new Date().toISOString(), 'agent3@gto.demo','Youssef Tarek Amin','Enquiry Agent','Holiday', dkey(addDays(today,3))+', '+dkey(addDays(today,4)), 2,'Family trip','agent3@gto.demo','Pending Manager','','','','','','',''],
+    ['RDEMO2', new Date().toISOString(), 'agent9@gto.demo','Hana Mahmoud','Reservation Agent','Emergency', dkey(addDays(today,1)), 1,'','agent9@gto.demo','Pending GM','tl2@gto.demo',new Date().toISOString(),'ok','','','',''],
+    ['RDEMO3', new Date().toISOString(), 'agent5@gto.demo','Ahmed Samir Ali','Enquiry Agent','Emergency', dkey(addDays(today,2)), 1,'Car broke down','agent5@gto.demo','Pending Manager','','','','','','','']];
+  const swaps = [['ID','Submitted At','Requester Email','Requester Name','Requester Date','Requester Shift','Teammate Email','Teammate Name','Teammate Date','Teammate Shift','Reason','Status','Decided By','Decided At','Note'],
+    ['SDEMO1', new Date().toISOString(), 'agent2@gto.demo','Salma Ibrahim', dkey(addDays(today,2)), '09:00-18:00', 'agent4@gto.demo','Mariam Nabil', dkey(addDays(today,2)), '12:30-21:30', 'Doctor appointment in the morning','Pending','','','']];
+  const books = { portal: { tblAccess: access, tblAttendance: att, tblRequests: reqs, tblSettings: settings, tblSwaps: swaps }, tracker: { Table1: tr, sheets:{ Balance: bal } }, rota: { sheets: weeks } };
+  const bk = url => url===CONFIG.portalDataUrl?books.portal: url===CONFIG.leavesTrackerUrl?books.tracker:books.rota;
+  const delay = () => new Promise(r=>setTimeout(r,60));
+  return {
+    async table(url,name){ await delay(); return rowsToObjects(JSON.parse(JSON.stringify(bk(url)[name]))); },
+    async tableTail(url,name){ return this.table(url,name); },
+    async addRow(url,name,values){ await delay(); bk(url)[name].push([...values]); },
+    async setRow(url,name,index,values){ await delay(); bk(url)[name][index+1] = [...values]; },
+    async sheetNames(url){ return Object.keys(bk(url).sheets); },
+    async sheetText(url,sheet){ return bk(url).sheets[sheet].map(r=>r.map(c=>String(c??''))); },
+    async sheetValues(url,sheet){ return bk(url).sheets[sheet]; },
+  };
+}
+if (DEMO){ CONFIG.portalDataUrl='demo://portal'; CONFIG.leavesTrackerUrl='demo://tracker'; CONFIG.rotaUrl='demo://rota'; }
+
+/* ============================ Auth ============================ */
+let msalApp = null, account = null;
+const SCOPES = ['User.Read'];
+function loadScript(src){ return new Promise((ok,bad)=>{ const s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=bad; document.head.appendChild(s); }); }
+async function initAuth(){
+  const srcs = ['https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js','https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.39.0/lib/msal-browser.min.js','https://unpkg.com/@azure/msal-browser@2.39.0/lib/msal-browser.min.js'];
+  for (const s of srcs){ try { await loadScript(s); if (window.msal) break; } catch(e){} }
+  if (!window.msal) throw new Error('Could not load the Microsoft sign-in library.');
+  msalApp = new msal.PublicClientApplication({ auth:{ clientId:CONFIG.clientId, authority:`https://login.microsoftonline.com/${CONFIG.tenantId||'organizations'}`, redirectUri: location.origin+location.pathname }, cache:{ cacheLocation:'localStorage' } });
+  if (msalApp.initialize) await msalApp.initialize();
+  const r = await msalApp.handleRedirectPromise();
+  account = r?.account || msalApp.getAllAccounts()[0] || null;
+  if (!account){ await msalApp.loginRedirect({ scopes: SCOPES }); return null; }
+  msalApp.setActiveAccount && msalApp.setActiveAccount(account);
+  return account;
+}
+async function getToken(force){
+  try { const r = await msalApp.acquireTokenSilent({ scopes:SCOPES, account, forceRefresh:!!force }); if (!r.idToken) throw new Error('no id token'); return r.idToken; }
+  catch(e){ await msalApp.acquireTokenRedirect({ scopes:SCOPES, account }); throw e; }
+}
+
+/* ============================ App state ============================ */
+const S = { tab:'home', me:null, D:null, settings:null, demoAs:'dm1@gto.demo', calMonth:null, attRange:null, schedOffset:0, leaveFilter:'' };
+let tickTimer = null, statusTimer = null;
+
+async function boot(){
+  try{
+    let email;
+    if (DEMO){ S.store = S.store || demoStore(); S.D = new Data(S.store); email = S.demoAs; }
+    else {
+      const acc = await initAuth(); if (!acc) return;
+      S.D = new ApiData();
+      try { await S.D.load(); }
+      catch(e){ if (e.status===403){ $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(e.message)}</p><button class="btn" onclick="msalApp.logoutRedirect()">Sign in with a different account</button></div></main>`; return; } throw e; }
+      email = S.D.me.email;
+    }
+    S.settings = await S.D.settings();
+    const acc = await S.D.access();
+    const me = acc.rows.find(r=>r.Email===email) || acc.rows.find(r=>normEmail(r['Personal Email'])===email);
+    if (me && me.Email!==email) email = me.Email || email;
+    if (!me || /^no$/i.test(String(me.Active||'').trim()) || !ROLES.includes(String(me['Portal Role']).trim())){
+      $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(email)} ${me&&!ROLES.includes(String(me['Portal Role']).trim())?'is on the list but has no portal role':'isn\'t on the portal\'s access list'}. Ask your Duty Manager to add you, then refresh this page.</p></div></main>`; return;
+    }
+    S.me = { email, name: me['Full Name'], role: String(me['Portal Role']).trim(), row: me, admin: yes(me['Portal Admin']) };
+    render();
+  } catch(e){ console.error(e); $('#app').innerHTML = `<div class="loading"><b>Something went wrong while loading.</b><br>${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div>`; }
+}
+
+/* ============================ Rendering shell ============================ */
+const ICON = {
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+  att:'<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>',
+  leave:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg>',
+  sched:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 9v12M15 9v12"/></svg>',
+  admin:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.9 2.6 2.6 3 5.2"/></svg>',
+  out:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h11"/></svg>'
+};
+const PAGES = { home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
+const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
+async function render(){
+  const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
+  const agent = u.role==='Agent'; if (agent && S.tab==='att') S.tab='home';
+  const pend = await pendingForMe();
+  const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
+  const swapsWaiting = (await swapQueue()).length;
+  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule']] : [['home','Home'],['att','Log in'],['leave','Leaves'],['sched','Schedule']];
+  if (u.admin) tabs.push(['admin','Access']);
+  const hour=new Date().getHours(); const greet = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+  const [title, sub] = S.tab==='home' ? [`${greet}, ${esc(String(u.name).split(/\s+/)[0])}`, isMgr(u)?'Here is what needs your attention today.':'Here is your day.'] : PAGES[S.tab];
+  $('#app').innerHTML = `
+  <div class="shell">
+    <aside class="side">
+      <div class="brand"><img src="${LOGO}" alt="GTO – Global Travel Organisation"><span class="bt"><b>GTO</b><span>Operations portal</span></span></div>
+      <nav class="nav" aria-label="Main">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}" ${S.tab===k?'aria-current="page"':''}>${ICON[k]}<span>${l}</span>${k==='leave'&&(pend+alerts)?`<span class="badge" title="Waiting for you">${pend+alerts}</span>`:''}${k==='sched'&&swapsWaiting?`<span class="badge" title="Swap requests waiting">${swapsWaiting}</span>`:''}</button>`).join('')}</nav>
+      <div class="me"><div class="av">${esc(initials(u.name))}</div><div class="who"><b>${esc(u.name)}</b><span>${esc(u.role)}</span></div>${DEMO?'':`<button id="signout" title="Sign out" aria-label="Sign out">${ICON.out}</button>`}</div>
+    </aside>
+    <div class="mainwrap">
+      <div class="mtop"><img src="${LOGO}" alt="GTO"><b>GTO</b><span class="muted" style="font-size:13px">Operations portal</span><div class="av" title="${esc(u.name)}">${esc(initials(u.name))}</div></div>
+      ${DEMO?`<div class="demo"><b>Demo</b> Sample people only, nothing is saved. Viewing as
+        <select id="demoAs" class="i">${(await S.D.access()).rows.map(r=>`<option value="${r.Email}" ${r.Email===S.demoAs?'selected':''}>${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select></div>`:''}
+      ${agent?'<div class="statusbar" id="statusbar" role="region" aria-label="Your status"></div>':''}
+      <header class="ph"><div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
+      <main id="view"><div class="loading">Loading…</div></main>
+    </div>
+  </div>`;
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
+  $('#signout') && ($('#signout').onclick = ()=>msalApp.logoutRedirect());
+  $('#demoAs') && ($('#demoAs').onchange = e=>{ S.demoAs=e.target.value; S.tab='home'; boot(); });
+  if (agent) await mountStatusBar();
+  try {
+    await ({home:viewHome, att:viewAttendance, leave:viewLeave, sched:viewSchedule, admin:viewAdmin}[S.tab])();
+  } catch(e){ console.error(e); $('#view').innerHTML = `<div class="alert bad">This page didn't load: ${esc(e.message)}. Refresh to try again.</div>`; }
+}
+
+/* agent status bar: Work / Break / Log out */
+async function mountStatusBar(){
+  const u=S.me; const bm=S.settings.BreakMinutes; await S.D.attendance();
+  const el=$('#statusbar'); let armed=null, busy=false;
+  const paint = () => {
+    const st = shiftState(S.D.cache.att.rows, u.email);
+    const mode = !st.open ? 'out' : st.onBreak ? 'break' : 'work';
+    const since = st.open ? (Date.now()-st.open.in)/6e4 - st.breakMins : 0;
+    const left = bm - st.breakMins;
+    const text = mode==='out' ? `<b>Logged out</b><span>Press Work when your shift starts</span>`
+      : mode==='work' ? `<b>Working</b><span>since ${hm(st.open.in)} · ${fmtMins(since)} worked · break ${Math.round(st.breakMins)}/${bm} min</span>`
+      : `<b>${left>=0?'On break':'Break over'}</b><span>${left>=0?fmtMins(left)+' left':'over by '+fmtMins(-left)} · press Work when you're back</span>`;
+    el.className = 'statusbar m-'+mode+(mode==='break'&&left<0?' m-over':'');
+    el.innerHTML = `<div class="sb-state"><i class="dot"></i><div>${text}</div></div>
+      <div class="seg" role="group" aria-label="Set your status">
+        <button data-st="work" class="${mode==='work'?'on':''}" ${busy?'disabled':''} aria-pressed="${mode==='work'}"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>Work</button>
+        <button data-st="break" class="${mode==='break'?'on':''}" ${busy||mode==='out'?'disabled':''} aria-pressed="${mode==='break'}" ${mode==='out'?'title="Press Work first"':''}><svg viewBox="0 0 24 24"><path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 010 5H17"/><path d="M8 3v3M12 3v3"/></svg>Break</button>
+        <button data-st="out" class="${mode==='out'?'on':''} ${armed==='out'?'armed':''}" ${busy||mode==='out'?'disabled':''} aria-pressed="${mode==='out'}"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1011.4 0"/></svg>${armed==='out'?'Confirm log out':'Log out'}</button>
+      </div>`;
+    el.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>choose(b.dataset.st, mode));
+  };
+  const choose = async (want, mode) => {
+    if (want===mode) return;
+    if (want==='out' && armed!=='out'){ armed='out'; paint(); setTimeout(()=>{ if(armed==='out'){ armed=null; paint(); } }, 4000); return; }
+    armed=null; busy=true; paint();
+    try{
+      const cur = shiftState(S.D.cache.att.rows, u.email); const date = cur.open ? cur.open.date : dkey(new Date());
+      if (want==='work'){ if (!cur.open) await recordAction('Clock In', u.row, date); else if (cur.onBreak) await recordAction('Break End', u.row, date); toast((cur.open?'Back at work':'Working')+' from '+hm(new Date())); }
+      if (want==='break'){ await recordAction('Break Start', u.row, date); toast('Break started at '+hm(new Date())); }
+      if (want==='out'){ if (cur.onBreak) await recordAction('Break End', u.row, date, 'auto: logged out on break'); await recordAction('Clock Out', u.row, date); toast('Logged out at '+hm(new Date())); }
+    }catch(e){ alertBox(e); }
+    busy=false; paint(); S._boardPaint && S._boardPaint();
+  };
+  paint(); statusTimer = setInterval(paint, 30000);
+}
+
+/* the shift board – used on Home and Log in */
+async function mountBoard(el, after){
+  const u=S.me; const bm=S.settings.BreakMinutes; const actions = u.role!=='Agent';
+  await S.D.attendance(); const today=new Date(); today.setHours(0,0,0,0);
+  const sh = await S.D.shiftFor(u.row,today); const ps = parseShift(sh.text);
+  const shiftLabel = ps ? ps.label : (sh.text ? sh.text.split('/')[0].trim() : 'Not on rota');
+  const shiftNote = ps ? (sh.text.split('/').slice(1).join(' / ').trim() || 'Scheduled today') : (sh.text?'No working hours today':'No shift found this week');
+  const paint = () => {
+    const s2 = shiftState(S.D.cache.att.rows, u.email); const used = s2.breakMins; const pct = Math.min(100, used/bm*100);
+    let cls='s-out', state=actions?'Not clocked in':'Logged out', note= ps?`Shift starts ${pad(Math.floor(ps.start/60)%24)}:${pad(ps.start%60)}`:(actions?'Clock in when you start':'Press Work in the top bar to start'), btns=`<button class="bbtn go" data-act="Clock In">Clock in</button>`;
+    if (s2.open && s2.onBreak){ const left=bm-used; cls= left>=0?'s-break':'s-over'; state = left>=0?'On break':'Break over'; note = left>=0?`${fmtMins(left)} left`:`Over by ${fmtMins(-left)}`; btns=`<button class="bbtn go" data-act="Break End">End break</button>`; }
+    else if (s2.open){ cls='s-in'; state=actions?'Clocked in':'Working'; note=`Since ${hm(s2.open.in)}`; btns=`<button class="bbtn go" data-act="Break Start">Start break</button><button class="bbtn ghost" data-act="Clock Out">Clock out</button>`; }
+    el.innerHTML = `<section class="board ${cls}" aria-live="polite">
+      <div class="b-cell b-time"><span class="b-l">Now</span><span class="b-v">${hm(new Date())}</span><span class="b-s">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</span></div>
+      <div class="b-cell"><span class="b-l">Today's shift</span><span class="b-v">${esc(shiftLabel)}</span><span class="b-s">${esc(shiftNote)}</span></div>
+      <div class="b-cell"><span class="b-l">Status</span><span class="b-v"><i class="dot"></i>${state}</span><span class="b-s">${note}</span></div>
+      <div class="b-cell"><span class="b-l">Break used</span><span class="b-v">${Math.round(used)}<small> / ${bm} min</small></span><div class="bar"><i class="${used>bm?'over':''}" style="width:${pct}%"></i></div></div>
+      ${actions?`<div class="b-act">${btns}</div>`:''}</section>`;
+    if (!actions) el.firstElementChild.classList.add('noact');
+    el.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
+      el.querySelectorAll('[data-act]').forEach(x=>x.disabled=true); const act=b.dataset.act;
+      try{
+        const cur = shiftState(S.D.cache.att.rows, u.email);
+        const date = cur.open ? cur.open.date : dkey(new Date());
+        if (act==='Clock Out' && cur.onBreak) await recordAction('Break End', u.row, date, 'auto: clocked out on break');
+        await recordAction(act, u.row, date);
+        toast({ 'Clock In':'Clocked in', 'Clock Out':'Clocked out', 'Break Start':'Break started', 'Break End':'Break ended' }[act]+' at '+hm(new Date()));
+      }catch(e){ alertBox(e); }
+      paint(); after && after();
+    });
+  };
+  paint(); clearInterval(tickTimer); tickTimer = setInterval(paint, 15000); S._boardPaint = paint;
+}
+
+/* ============================ Attendance logic ============================ */
+function shiftState(events, email){
+  const mine = events.filter(e=>e.Email===email).sort((a,b)=>a.ts-b.ts);
+  let open=null;
+  for (const e of mine){
+    if (e.Action==='Clock In') open = { date:e['Shift Date'], in:e.ts, events:[e] };
+    else if (open){ open.events.push(e); if (e.Action==='Clock Out') open=null; }
+  }
+  if (open && (Date.now()-open.in) > 20*3600e3) open = null; // stale forgotten clock-out
+  let onBreak=null, breakMins=0;
+  if (open){ for (const e of open.events){ if (e.Action==='Break Start') onBreak=e.ts; if (e.Action==='Break End' && onBreak){ breakMins += (e.ts-onBreak)/6e4; onBreak=null; } } }
+  return { open, onBreak, breakMins: breakMins + (onBreak?(Date.now()-onBreak)/6e4:0) };
+}
+function summarise(events, email, date){
+  const ev = events.filter(e=>e.Email===email && e['Shift Date']===date).sort((a,b)=>a.ts-b.ts);
+  const o = { ev, in:null, out:null, breakMins:0, breaks:0, openBreak:false };
+  let bs=null;
+  for (const e of ev){
+    if (e.Action==='Clock In' && !o.in) o.in=e.ts;
+    if (e.Action==='Clock Out') o.out=e.ts;
+    if (e.Action==='Break Start'){ bs=e.ts; o.breaks++; }
+    if (e.Action==='Break End' && bs){ o.breakMins += (e.ts-bs)/6e4; bs=null; }
+  }
+  if (bs){ o.openBreak=true; if (!o.out) o.breakMins += (Date.now()-bs)/6e4; }
+  return o;
+}
+async function recordAction(action, person, shiftDate, note=''){
+  const now = new Date();
+  await S.D.addAttendance({ ID:uid('A'), Email:person.Email, Name:person['Full Name'], 'Shift Date':shiftDate, Action:action, Timestamp: now.toISOString(), 'Recorded By': S.me.email, Note: note });
+}
+
+async function viewAttendance(){
+  const v = $('#view'); const u = S.me;
+  await S.D.attendance(true);
+  let html = `<div id="board"></div>
+    <div class="card sec"><h2>Today's activity</h2><div id="mylog"></div></div>`;
+  if (isMgr(u)) html += `<div class="card sec"><div class="row" style="margin-bottom:4px"><h2 style="margin:0">Team log-in breakdown</h2><span class="spacer"></span>
+     <div class="toolbar"><input type="date" id="af" class="i" aria-label="From"><span class="muted">to</span><input type="date" id="at" class="i" aria-label="To">
+     <select id="ateam" class="i" aria-label="Team"></select>
+     <input id="aq" class="i" placeholder="Search name" style="width:170px">
+     <button class="btn" id="acsv">Download CSV</button></div></div>
+     <div id="asum"></div><div id="abreak" class="tablewrap"><div class="loading">Loading…</div></div></div>`;
+  v.innerHTML = html;
+  const paintLog = () => {
+    const s2 = shiftState(S.D.cache.att.rows, u.email);
+    const date = s2.open ? s2.open.date : dkey(new Date());
+    const sm = summarise(S.D.cache.att.rows, u.email, date);
+    $('#mylog').innerHTML = sm.ev.length ? `<div class="tablewrap"><table><thead><tr><th>Time</th><th>Action</th></tr></thead><tbody>${sm.ev.map(e=>`<tr><td class="num">${hm(e.ts)}</td><td>${esc(e.Action)}${e.Note?` <span class="muted">(${esc(e.Note)})</span>`:''}</td></tr>`).join('')}</tbody></table></div>` : `<p class="muted" style="margin:0">Nothing recorded yet for ${fmtDate(date)}. Clock in on the board above when your shift starts.</p>`;
+  };
+  await mountBoard($('#board'), paintLog); paintLog();
+  if (isMgr(u)) await breakdown();
+}
+
+async function teamMembers(){
+  const acc = (await S.D.access()).rows.filter(r=>!/^no$/i.test(String(r.Active||'').trim()));
+  return acc;
+}
+async function breakdown(){
+  const u = S.me; const today = new Date(); today.setHours(0,0,0,0);
+  S.attRange = S.attRange || { from: dkey(today), to: dkey(today), team: u.role==='Team Leader'?'mine':'all', q:'' };
+  const R = S.attRange;
+  $('#af').value=R.from; $('#at').value=R.to;
+  const acc = await teamMembers();
+  const teams = [...new Set(acc.map(r=>r.Team).filter(Boolean))].sort();
+  $('#ateam').innerHTML = `<option value="all">All teams</option>${u.role==='Team Leader'?'<option value="mine">My team</option>':''}${teams.map(t=>`<option ${R.team===t?'selected':''}>${esc(t)}</option>`).join('')}`;
+  $('#ateam').value = R.team; $('#aq').value = R.q;
+  const re = () => { R.from=$('#af').value; R.to=$('#at').value; R.team=$('#ateam').value; R.q=$('#aq').value; breakdown(); };
+  $('#af').onchange=re; $('#at').onchange=re; $('#ateam').onchange=re; $('#aq').oninput=()=>{ clearTimeout(window._q); window._q=setTimeout(re,300); };
+  let people = acc.filter(r=>r['Portal Role']==='Agent' && r.Email);
+  if (R.team==='mine') people = people.filter(r=>r['Manager Email']===u.email);
+  else if (R.team!=='all') people = people.filter(r=>r.Team===R.team);
+  if (R.q) people = people.filter(r=>norm(r['Full Name']).includes(norm(R.q)));
+  const events = S.D.cache.att.rows; const bm=S.settings.BreakMinutes, grace=S.settings.LateGraceMinutes;
+  const rows = [];
+  let d0 = fromKey(R.from), d1 = fromKey(R.to); if (d1<d0) [d0,d1]=[d1,d0]; if ((d1-d0)/864e5>31) d1 = addDays(d0,31);
+  const mgrName = e => (acc.find(r=>r.Email===e)||{})['Full Name']||'';
+  for (let d=new Date(d0); d<=d1; d=addDays(d,1)){
+    const k = dkey(d);
+    for (const p of people){
+      const sh = await S.D.shiftFor(p, d); const ps = parseShift(sh.text);
+      const sm = summarise(events, p.Email, k);
+      if (!sm.in && !ps) continue;
+      const r = { date:k, name:p['Full Name'], email:p.Email, tl:mgrName(p['Manager Email'])||p._tl||'', shift: sh.text + (sh.swapWith?` (swap with ${String(sh.swapWith).split(/\s+/)[0]})`:''), in:sm.in, out:sm.out, breakMins:sm.breakMins, ev:sm.ev, flags:[] };
+      if (ps){
+        const sStart = new Date(d.getTime()+ps.start*6e4), sEnd = new Date(d.getTime()+ps.end*6e4);
+        if (sm.in){ const late=(sm.in-sStart)/6e4; if (late>grace) { r.late=late; r.flags.push(['bad','Late '+fmtMins(late)]); } }
+        else if (Date.now() > sStart.getTime()+grace*6e4) r.flags.push(['bad','No clock-in']);
+        if (sm.out){ const early=(sEnd-sm.out)/6e4; if (early>1){ r.early=early; r.flags.push(['warn','Left early '+fmtMins(early)]); } }
+        else if (sm.in && Date.now()>sEnd.getTime()+30*6e4) r.flags.push(['warn','No clock-out']);
+      } else if (sm.in) r.flags.push(['info','Not on rota']);
+      if (sm.breakMins>bm){ r.over=sm.breakMins-bm; r.flags.push(['bad','Break over '+fmtMins(r.over)]); }
+      if (sm.openBreak && !sm.out) r.flags.push(['warn','On break now']);
+      if (sm.in) r.worked = ((sm.out||new Date()) - sm.in)/6e4 - sm.breakMins;
+      rows.push(r);
+    }
+  }
+  S._breakRows = rows;
+  const cnt = f => rows.filter(f).length;
+  $('#asum').innerHTML = `<div class="counts">${[['On rota or logged',rows.length,''],['Clocked in',cnt(r=>r.in),'ok'],['Late',cnt(r=>r.late),'bad'],['No clock-in',cnt(r=>r.flags.some(f=>f[1]==='No clock-in')),'bad'],['Break overruns',cnt(r=>r.over),'bad'],['Left early',cnt(r=>r.early),'warn']]
+    .map(([l,n,c])=>`<div class="${n?c:''}"><b>${n}</b>${l}</div>`).join('')}</div>`;
+  $('#abreak').innerHTML = rows.length ? `<table><thead><tr><th>Date</th><th>Agent</th><th>Team leader</th><th>Rota shift</th><th>Clock in</th><th>Break</th><th>Clock out</th><th>Worked</th><th>Flags</th><th></th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(r.name)}</td><td class="muted">${esc(r.tl)}</td><td>${esc(r.shift||'—')}</td><td class="num">${hm(r.in)||'—'}</td><td class="num">${r.ev.some(e=>e.Action==='Break Start')?fmtMins(r.breakMins):'—'}</td><td class="num">${hm(r.out)||'—'}</td><td class="num">${r.worked?fmtMins(r.worked):''}</td><td>${r.flags.map(f=>`<span class="chip ${f[0]}">${esc(f[1])}</span>`).join('')||'<span class="chip ok">OK</span>'}</td><td><button class="btn sm" data-det="${i}">View</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No agents on the rota and no log-ins for these dates. Try a different date range or team.</div>`;
+  document.querySelectorAll('[data-det]').forEach(b=>b.onclick=()=>attDetail(rows[+b.dataset.det]));
+  $('#acsv').onclick = () => {
+    const lines = [['Date','Agent','Email','Team leader','Rota shift','Clock in','Break minutes','Clock out','Worked minutes','Flags']].concat(rows.map(r=>[r.date,r.name,r.email,r.tl,r.shift,hm(r.in),Math.round(r.breakMins),hm(r.out),Math.round(r.worked||0),r.flags.map(f=>f[1]).join('; ')]));
+    const csv = lines.map(l=>l.map(x=>`"${String(x??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`login-breakdown-${R.from}_${R.to}.csv`; a.click();
+  };
+}
+function attDetail(r){
+  const canFix = ['Duty Manager','General Manager'].includes(S.me.role) || (S.me.role==='Team Leader');
+  modal(`<h2>${esc(r.name)} – ${fmtDate(r.date)}</h2><p class="muted">Rota: ${esc(r.shift||'not on rota')}</p>
+    ${r.ev.length?`<table><tr><th>Time</th><th>Action</th><th>Recorded by</th><th>Note</th></tr>${r.ev.map(e=>`<tr><td>${hm(e.ts)}</td><td>${esc(e.Action)}</td><td class="muted">${esc(e['Recorded By']===e.Email?'self':e['Recorded By'])}</td><td>${esc(e.Note)}</td></tr>`).join('')}</table>`:'<p class="muted">No log-in events.</p>'}
+    ${canFix?`<h3 style="margin-top:16px">Add a missing entry</h3><div class="row"><select id="fxA" class="i" style="width:auto"><option>Clock In</option><option>Break Start</option><option>Break End</option><option>Clock Out</option></select><input type="time" id="fxT" class="i" style="width:auto"><input id="fxN" class="i" placeholder="Reason (required)" style="flex:1;min-width:160px"><button class="btn primary" id="fxGo">Add</button></div>`:''}
+    <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Close</button></div>`);
+  $('#fxGo') && ($('#fxGo').onclick = async()=>{
+    const t=$('#fxT').value, n=$('#fxN').value.trim(); if(!t||!n) return toast('Time and reason are required');
+    const [h,m]=t.split(':').map(Number); let ts=fromKey(r.date); ts.setHours(h,m,0,0);
+    const ps=parseShift(r.shift); if (ps && ps.end>1440 && h*60+m < ps.start-120) ts=addDays(ts,1);
+    const p=(await S.D.access()).rows.find(x=>x.Email===r.email);
+    await S.D.addAttendance({ ID:uid('A'), Email:p.Email, Name:p['Full Name'], 'Shift Date':r.date, Action:$('#fxA').value, Timestamp:ts.toISOString(), 'Recorded By':S.me.email, Note:'Manual: '+n });
+    closeModal(); toast('Entry added'); breakdown();
+  });
+}
+
+/* ============================ Leave logic ============================ */
+async function personByEmail(e){ return (await S.D.access()).rows.find(r=>r.Email===e); }
+async function leaveStats(person){
+  const tr = (await S.D.tracker()).items; const bal = await S.D.balance(); const n = norm(person['Full Name']);
+  const mine = tr.filter(x=>x.n===n);
+  const consumed = mine.filter(x=>x.approved && (x.type==='Holiday'||x.type==='Emergency')).length;
+  const emerg = mine.filter(x=>x.approved && x.type==='Emergency').length;
+  const reqs = (await S.D.requests()).rows.filter(r=>r.Email===person.Email && /^Pending/.test(r.Status));
+  const pendingDays = reqs.reduce((a,r)=>a+r.dateList.length,0);
+  const b = bal[n]; const allowance = b ? b.allowance : null;
+  return { mine, consumed, emerg, pendingDays, allowance, remaining: allowance==null?null:allowance-consumed, b };
+}
+async function emergencyAlerts(){
+  const tr = (await S.D.tracker()).items; const lim = S.settings.EmergencyLimit; const acc = (await S.D.access()).rows;
+  const by = {}; tr.filter(x=>x.approved && x.type==='Emergency').forEach(x=>{ (by[x.n]=by[x.n]||{name:x.name,role:x.role,count:0,dates:[]}); by[x.n].count++; by[x.n].dates.push(x.date); });
+  let list = Object.values(by).filter(x=>x.count>lim).sort((a,b)=>b.count-a.count);
+  if (S.me.role==='Team Leader'){ const mine = new Set(acc.filter(r=>r['Manager Email']===S.me.email).map(r=>norm(r['Full Name']))); list = list.filter(x=>mine.has(norm(x.name))); }
+  return list;
+}
+async function slotMap(){
+  const tr = (await S.D.tracker()).items; const reqs = (await S.D.requests()).rows; const acc=(await S.D.access()).rows;
+  const map = {};
+  const put = (date, o) => { if (!date) return; (map[date]=map[date]||[]).push(o); };
+  tr.forEach(x=>{ if (x.cancelled || x.type==='Holiday Cancellation') return; if (x.approved || x.pending) put(x.date,{name:x.name,role:x.role||'Other',type:x.type,status:x.approved?'Approved':'Pending'}); });
+  reqs.filter(r=>/^Pending/.test(r.Status)).forEach(r=>r.dateList.forEach(d=>put(d,{name:r.Name,role:r['Tracker Role']||'Other',type:r['Leave Type'],status:r.Status})));
+  return map;
+}
+async function pendingForMe(){ return (await approvalQueue()).length; }
+async function swapQueue(){ if (S.me.role!=='Duty Manager') return []; return (await S.D.swaps()).rows.filter(r=>r.Status==='Pending' && r['Requester Email']!==S.me.email && r['Teammate Email']!==S.me.email); }
+async function approvalQueue(){
+  const u=S.me; const reqs=(await S.D.requests()).rows; const acc=(await S.D.access()).rows;
+  const mgrOf = e => (acc.find(r=>r.Email===e)||{})['Manager Email'];
+  return reqs.filter(r=>{
+    if (r.Email===u.email) return false;
+    if (r.Status==='Pending Manager'){
+      if (r['Submitted By']===u.email) return false;
+      return u.role==='Duty Manager' || (u.role==='Team Leader' && mgrOf(r.Email)===u.email);
+    }
+    if (r.Status==='Pending GM') return u.role==='General Manager';
+    return false;
+  });
+}
+
+async function viewLeave(){
+  const v=$('#view'); const u=S.me;
+  const st = await leaveStats(u.row); const lim=S.settings.EmergencyLimit;
+  const alerts = isMgr(u) ? await emergencyAlerts() : [];
+  const queue = await approvalQueue();
+  const myReqs = (await S.D.requests(true)).rows.filter(r=>r.Email===u.email || r['Submitted By']===u.email).reverse();
+  v.innerHTML = `
+    ${alerts.length?`<div class="alert bad"><b>⚠ Emergency limit exceeded (${lim} days):</b> ${alerts.map(a=>`${esc(a.name)} <b>${a.count}</b>`).join(' · ')}</div>`:''}
+    ${!isMgr(u)&&st.emerg>lim?`<div class="alert bad">You have used <b>${st.emerg}</b> emergency days – above the ${lim}-day limit.</div>`:''}
+    <div class="metrics">
+      <div class="m"><h3>PTO allowance</h3><div class="stat">${st.allowance??'—'}</div><p>days this leave year</p></div>
+      <div class="m"><h3>Taken</h3><div class="stat">${st.consumed}</div><p>PTO and emergency</p></div>
+      <div class="m"><h3>Remaining</h3><div class="stat" style="color:${st.remaining<0?'var(--bad)':'inherit'}">${st.remaining??'—'}</div><p>${st.pendingDays?`${st.pendingDays} more waiting for approval`:'nothing pending'}</p></div>
+      <div class="m ${st.emerg>lim?'alert-m':''}"><h3>Emergency used</h3><div class="stat" style="color:${st.emerg>lim?'var(--bad)':st.emerg>=lim?'var(--warn)':'inherit'}">${st.emerg}<small> of ${lim}</small></div><p>${st.emerg>lim?'over the limit':st.emerg>=lim?'limit reached':`${lim-st.emerg} left before an alert`}</p></div>
+    </div>
+    ${queue.length?`<div class="card sec"><h2>Waiting for your approval <span class="muted" style="font-weight:500">${queue.length}</span></h2><div id="queue"></div></div>`:''}
+    <div class="grid g2 sec">
+      <div class="card"><h2>Request leave</h2><div id="reqform"></div></div>
+      <div class="card"><h2>My requests</h2><div id="myreqs"></div></div>
+    </div>
+    <div class="card sec"><div class="row"><h2 style="margin:0">Who's off each day</h2><span class="spacer"></span><button class="btn sm" id="cprev">‹</button><b id="cmon"></b><button class="btn sm" id="cnext">›</button></div>
+      <p class="muted" style="margin:6px 0 12px">${isMgr(u)?'Approved + pending leave per day, split by role. Click a day for names.':'How many people in your role ('+esc(u.row['Tracker Role']||'')+') are already off each day.'}</p><div id="cal"></div></div>
+    ${isMgr(u)?`<div class="card sec"><div class="row"><h2 style="margin:0">Portal requests</h2><span class="spacer"></span><input id="lhq" class="i" style="width:220px" placeholder="Search person"></div><div id="lh" style="margin-top:10px"></div></div>`:''}
+    <div class="card sec"><h2>My leave days</h2>${st.mine.length?`<div>${st.mine.filter(x=>x.date).sort((a,b)=>a.date<b.date?1:-1).map(x=>`<span class="chip ${x.approved?(x.type==='Emergency'?'warn':'ok'):x.pending?'info':''}">${fmtDate(x.date)} · ${esc(x.type)}${x.approved?'':' · '+esc(x.status||'pending')}</span>`).join('')}</div>`:'<p class="muted" style="margin:0">No leave recorded in the tracker yet.</p>'}</div>`;
+  await reqForm(); paintMyReqs(myReqs); if (queue.length) await paintQueue(queue); await paintCal();
+  if (isMgr(u)) paintHistory();
+}
+function statusChip(s){ return `<span class="chip ${s==='Approved'?'ok':(s==='Rejected'||s==='Declined')?'bad':s==='Cancelled'?'':'warn'}">${esc(s)}</span>`; }
+async function paintMyReqs(list){
+  const acc=(await S.D.access()).rows; const nm=e=>(acc.find(r=>r.Email===e)||{})['Full Name']||e;
+  $('#myreqs').innerHTML = list.length ? `<div class="tablewrap" style="max-height:340px"><table><tr><th>Type</th><th>Dates</th><th>Status</th><th></th></tr>${list.map(r=>`<tr><td>${esc(LEAVE_LABEL[r['Leave Type']]||r['Leave Type'])}${r.Email!==S.me.email?`<div class="muted">for ${esc(r.Name)}</div>`:''}</td><td>${r.dateList.map(d=>`<span class="chip">${fmtDate(d)}</span>`).join('')}</td><td>${statusChip(r.Status)}${r['Stage 1 By']?`<div class="muted" style="font-size:12px">Manager: ${esc(nm(r['Stage 1 By']))}${r['Stage 1 Note']?' – '+esc(r['Stage 1 Note']):''}</div>`:''}${r['Stage 2 By']?`<div class="muted" style="font-size:12px">GM: ${esc(nm(r['Stage 2 By']))}${r['Stage 2 Note']?' – '+esc(r['Stage 2 Note']):''}</div>`:''}</td><td>${/^Pending/.test(r.Status)?`<button class="btn sm" data-cancel="${r.ID}">Cancel</button>`:''}</td></tr>`).join('')}</table></div>` : '<p class="muted" style="margin:0">You haven\'t sent any requests. Use the form to request leave.</p>';
+  document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{ b.disabled=true; await S.D.updateRequest(b.dataset.cancel,{Status:'Cancelled'}); toast('Request cancelled'); render(); });
+}
+async function reqForm(){
+  const u=S.me; const acc=(await S.D.access()).rows.filter(r=>ROLES.includes(String(r['Portal Role']).trim()) && !/^no$/i.test(String(r.Active||'').trim()));
+  const types = canRaiseForOthers(u) ? LEAVE_TYPES_ALL : ['Holiday','Emergency'];
+  $('#reqform').innerHTML = `
+    ${canRaiseForOthers(u)?`<label class="f">For</label><select id="rfor" class="i"><option value="${u.email}">Myself</option>${acc.filter(r=>r.Email&&r.Email!==u.email).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1).map(r=>`<option value="${r.Email}">${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select>`:''}
+    <label class="f">Leave type</label><select id="rtype" class="i">${types.map(t=>`<option value="${t}">${LEAVE_LABEL[t]}</option>`).join('')}</select>
+    <div class="row"><div style="flex:1"><label class="f">From</label><input type="date" id="rfrom" class="i"></div><div style="flex:1"><label class="f">To</label><input type="date" id="rto" class="i"></div></div>
+    <div id="rdates" class="datechips" style="margin-top:8px"></div>
+    <label class="f">Reason / comment</label><textarea id="rreason" class="i" rows="2"></textarea>
+    <div id="rwarn" style="margin-top:10px"></div>
+    <button class="btn primary big" id="rsend" style="margin-top:8px;width:100%">Send request</button>`;
+  const today = dkey(new Date()); $('#rfrom').value=today; $('#rto').value=today;
+  const refresh = async () => {
+    const f=$('#rfrom').value, t=$('#rto').value; if (!f||!t) return;
+    let a=fromKey(f), b=fromKey(t); if (b<a) [a,b]=[b,a]; const days=[];
+    for (let d=new Date(a); d<=b && days.length<62; d=addDays(d,1)) days.push(d);
+    const target = await personByEmail(($('#rfor')||{}).value||u.email);
+    const shifts = await Promise.all(days.map(d=>S.D.shiftFor(target,d)));
+    $('#rdates').innerHTML = days.map((d,i)=>{ const s=shifts[i].text; const off=!s||/^off/i.test(s); return `<label title="${esc(s||'not on rota')}"><input type="checkbox" value="${dkey(d)}" ${off&&days.length>1?'':'checked'}> ${fmtDate(d)} <span class="muted">${esc(s?s.split('/')[0]:'')}</span></label>`; }).join('');
+    $('#rdates').querySelectorAll('input').forEach(i=>i.onchange=warn);
+    warn();
+  };
+  const warn = async () => {
+    const target = await personByEmail(($('#rfor')||{}).value||u.email);
+    const sel=[...document.querySelectorAll('#rdates input:checked')].map(i=>i.value);
+    const type=$('#rtype').value; const st=await leaveStats(target); const lim=S.settings.EmergencyLimit; const msgs=[];
+    if (type==='Emergency' && st.emerg+sel.length>lim) msgs.push(['bad',`This takes ${esc(target['Full Name'])} to ${st.emerg+sel.length} emergency days (limit ${lim}). It will be flagged to managers.`]);
+    if (type==='Holiday' && st.remaining!=null && st.remaining - st.pendingDays - sel.length < 0) msgs.push(['warn',`Not enough balance: ${st.remaining} remaining, ${st.pendingDays} already pending.`]);
+    const sm = await slotMap(); const role=target['Tracker Role'];
+    const busy = sel.map(d=>[d,(sm[d]||[]).filter(x=>x.role===role).length]).filter(x=>x[1]>0);
+    if (busy.length) msgs.push(['info',`Already off in ${esc(role||'this role')}: `+busy.map(([d,n])=>`${fmtDate(d)} <b>${n}</b>`).join(', ')]);
+    $('#rwarn').innerHTML = msgs.map(m=>`<div class="alert ${m[0]}" style="margin-bottom:6px">${m[1]}</div>`).join('');
+  };
+  ['rfrom','rto'].forEach(id=>$('#'+id).onchange=refresh); $('#rtype').onchange=warn; $('#rfor')&&($('#rfor').onchange=refresh);
+  await refresh();
+  $('#rsend').onclick = async () => {
+    const target = await personByEmail(($('#rfor')||{}).value||u.email);
+    const sel=[...document.querySelectorAll('#rdates input:checked')].map(i=>i.value);
+    if (!sel.length) return toast('Pick at least one day');
+    const dupe = (await S.D.requests(true)).rows.some(r=>r.Email===target.Email && /^Pending|Approved/.test(r.Status) && r.dateList.some(d=>sel.includes(d)));
+    if (dupe) return toast('There is already a request covering one of these days');
+    $('#rsend').disabled=true;
+    try{
+      await S.D.addRequest({ ID:uid('R'), 'Submitted At':new Date().toISOString(), Email:target.Email, Name:target['Full Name'], 'Tracker Role':target['Tracker Role'], 'Leave Type':$('#rtype').value, Dates:sel.join(', '), Days:sel.length, Reason:$('#rreason').value.trim(), 'Submitted By':u.email, Status:'Pending Manager', 'Written To Tracker':'No' });
+      toast('Request sent'); render();
+    }catch(e){ alertBox(e); $('#rsend').disabled=false; }
+  };
+}
+async function paintQueue(queue){
+  const sm = await slotMap(); const lim=S.settings.EmergencyLimit; const acc=(await S.D.access()).rows; const nm=e=>(acc.find(r=>r.Email===e)||{})['Full Name']||e;
+  const parts = [];
+  for (const r of queue){
+    const p = await personByEmail(r.Email) || {'Full Name':r.Name, Email:r.Email};
+    const st = await leaveStats(p);
+    const em = r['Leave Type']==='Emergency' && st.emerg + r.dateList.length > lim;
+    parts.push(`<div class="req ${em?'flag':''}">
+      <div class="row"><b>${esc(r.Name)}</b><span class="chip">${esc(r['Tracker Role'])}</span><span class="chip ${r['Leave Type']==='Emergency'?'warn':'info'}">${esc(LEAVE_LABEL[r['Leave Type']]||r['Leave Type'])}</span>${statusChip(r.Status)}${em?`<span class="chip bad">Emergency ${st.emerg}+${r.dateList.length} &gt; ${lim}</span>`:''}<span class="spacer"></span><span class="muted">by ${esc(nm(r['Submitted By']))}</span></div>
+      <div style="margin:8px 0">${r.dateList.map(d=>{ const others=(sm[d]||[]).filter(x=>x.role===r['Tracker Role'] && norm(x.name)!==norm(r.Name)); return `<span class="chip ${others.length>=3?'warn':''}">${fmtDate(d)}: <b>${others.length}</b> already off</span>`; }).join('')}</div>
+      <div class="muted">Balance: ${st.remaining??'—'} remaining · Emergency used ${st.emerg}/${lim}${r.Reason?` · Reason: ${esc(r.Reason)}`:''}${r['Stage 1 By']?` · Manager approved: ${esc(nm(r['Stage 1 By']))}`:''}</div>
+      <div class="row" style="margin-top:10px"><input class="i" style="flex:1;min-width:160px" placeholder="Note (optional)" id="n_${r.ID}"><button class="btn primary" data-ap="${r.ID}">Approve</button><button class="btn danger" data-rj="${r.ID}">Reject</button></div></div>`);
+  }
+  $('#queue').innerHTML = parts.join('');
+  document.querySelectorAll('[data-ap],[data-rj]').forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.ap||b.dataset.rj; const ok=!!b.dataset.ap; const note=$('#n_'+id).value.trim(); b.disabled=true;
+    try { await decide(id, ok, note); toast(ok?'Approved':'Rejected'); } catch(e){ alertBox(e); }
+    render();
+  });
+}
+async function decide(id, ok, note){
+  if (S.D instanceof ApiData){ await S.D.call('POST','decide',{id,ok,note}); await Promise.all([S.D.requests(true), S.D.tracker(true)]); return; }
+  const u=S.me; const r=(await S.D.requests(true)).rows.find(x=>x.ID===id); const now=new Date().toISOString();
+  if (r.Status==='Pending Manager'){
+    if (!ok) return S.D.updateRequest(id,{Status:'Rejected','Stage 1 By':u.email,'Stage 1 At':now,'Stage 1 Note':note});
+    const p = await personByEmail(r.Email);
+    if (p && p['Portal Role']==='General Manager'){ await S.D.updateRequest(id,{Status:'Approved','Stage 1 By':u.email,'Stage 1 At':now,'Stage 1 Note':note}); return writeToTracker(id); }
+    return S.D.updateRequest(id,{Status:'Pending GM','Stage 1 By':u.email,'Stage 1 At':now,'Stage 1 Note':note});
+  }
+  if (r.Status==='Pending GM'){
+    if (!ok) return S.D.updateRequest(id,{Status:'Rejected','Stage 2 By':u.email,'Stage 2 At':now,'Stage 2 Note':note});
+    await S.D.updateRequest(id,{Status:'Approved','Stage 2 By':u.email,'Stage 2 At':now,'Stage 2 Note':note});
+    return writeToTracker(id);
+  }
+}
+async function writeToTracker(id){
+  if (S.D instanceof ApiData){ await S.D.call('POST','retry',{id}); await Promise.all([S.D.requests(true), S.D.tracker(true)]); return; }
+  const r=(await S.D.requests(true)).rows.find(x=>x.ID===id); const acc=(await S.D.access()).rows;
+  const by=(acc.find(x=>x.Email===r['Submitted By'])||{})['Full Name']||r['Submitted By'];
+  try{
+    await S.D.appendTracker(r.dateList.map(d=>({date:d,name:r.Name,role:r['Tracker Role'],by,type:r['Leave Type'],comment:'Portal '+r.ID+(r.Reason?' – '+r.Reason:'')})));
+    await S.D.updateRequest(id,{'Written To Tracker':'Yes'});
+  }catch(e){ throw new Error('Approved, but writing to the Leaves Tracker failed: '+e.message+'. Use "Retry tracker write" in the leave history.'); }
+}
+async function paintCal(){
+  const u=S.me; const sm=await slotMap(); const now=new Date();
+  S.calMonth = S.calMonth || new Date(now.getFullYear(), now.getMonth(), 1);
+  const m=S.calMonth; $('#cmon').textContent = m.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  $('#cprev').onclick=()=>{ S.calMonth=new Date(m.getFullYear(),m.getMonth()-1,1); paintCal(); };
+  $('#cnext').onclick=()=>{ S.calMonth=new Date(m.getFullYear(),m.getMonth()+1,1); paintCal(); };
+  const start = mondayOf(m); const cells=[]; const myRole=u.row['Tracker Role'];
+  for (let i=0;i<42;i++){
+    const d=addDays(start,i); const k=dkey(d); let list=sm[k]||[];
+    if (!isMgr(u)) list = list.filter(x=>x.role===myRole);
+    const byRole={}; list.forEach(x=>byRole[x.role]=(byRole[x.role]||0)+1);
+    cells.push(`<div class="day ${d.getMonth()!==m.getMonth()?'out':''} ${k===dkey(now)?'today':''} ${list.length>=5?'hi':''}" data-day="${k}"><span class="n">${d.getDate()}</span>${list.length?`<span class="tot">${list.length}</span>`:''}
+      <div>${Object.entries(byRole).map(([r,n])=>`<div class="muted" style="font-size:11px">${esc(r)}: <b style="color:var(--ink)">${n}</b></div>`).join('')}</div></div>`);
+    if (i===34 && addDays(start,35).getMonth()!==m.getMonth()) break;
+  }
+  $('#cal').innerHTML = `<div class="cal">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<div class="dow">${x}</div>`).join('')}${cells.join('')}</div>`;
+  if (isMgr(u)) document.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{ const list=sm[el.dataset.day]||[];
+    modal(`<h2>${fmtDate(el.dataset.day)} – ${list.length} off</h2>${list.length?`<table><tr><th>Name</th><th>Role</th><th>Type</th><th>Status</th></tr>${list.sort((a,b)=>a.role<b.role?-1:1).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${esc(x.type)}</td><td>${statusChip(x.status)}</td></tr>`).join('')}</table>`:'<p class="muted">Nobody off.</p>'}<div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn" data-close>Close</button></div>`); });
+}
+async function paintHistory(){
+  const reqs=(await S.D.requests()).rows.slice().reverse(); const acc=(await S.D.access()).rows; const nm=e=>(acc.find(r=>r.Email===e)||{})['Full Name']||e;
+  let list = reqs; if (S.me.role==='Team Leader') { const mine=new Set(acc.filter(r=>r['Manager Email']===S.me.email).map(r=>r.Email)); list = list.filter(r=>mine.has(r.Email)||r['Submitted By']===S.me.email); }
+  const q=norm(($('#lhq')||{}).value||''); if (q) list=list.filter(r=>norm(r.Name).includes(q));
+  const canRetry = ['Duty Manager','General Manager'].includes(S.me.role);
+  $('#lh').innerHTML = list.length?`<div class="tablewrap" style="max-height:420px"><table><tr><th>Submitted</th><th>Person</th><th>Type</th><th>Dates</th><th>Status</th><th>Manager</th><th>GM</th><th>Tracker</th></tr>${list.map(r=>`<tr><td>${fmtDate(parseTs(r['Submitted At']))}</td><td>${esc(r.Name)}</td><td>${esc(r['Leave Type'])}</td><td>${r.dateList.map(d=>`<span class="chip">${fmtDate(d)}</span>`).join('')}</td><td>${statusChip(r.Status)}</td><td class="muted">${esc(nm(r['Stage 1 By']))}</td><td class="muted">${esc(nm(r['Stage 2 By']))}</td><td>${r.Status==='Approved'?(r['Written To Tracker']==='Yes'?'<span class="chip ok">Written</span>':canRetry?`<button class="btn sm" data-retry="${r.ID}">Retry tracker write</button>`:'<span class="chip warn">Not yet</span>'):''}</td></tr>`).join('')}</table></div>`:'<p class="muted">No portal requests yet.</p>';
+  $('#lhq').oninput=()=>{ clearTimeout(window._h); window._h=setTimeout(paintHistory,250); };
+  document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await writeToTracker(b.dataset.retry); toast('Written to tracker'); }catch(e){ alertBox(e); } paintHistory(); });
+}
+
+/* ============================ Schedule ============================ */
+async function viewSchedule(){
+  const v=$('#view'); const u=S.me;
+  const base = addDays(mondayOf(new Date()), S.schedOffset*7);
+  const rota = await S.D.rotaFor(addDays(base,1));
+  const days=[0,1,2,3,4,5,6].map(i=>addDays(base,i)); const tk=dkey(new Date());
+  const head = `<div class="row" style="margin-bottom:14px"><button class="btn sm" id="sp" aria-label="Previous week">‹</button><b>Week of ${base.toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</b><button class="btn sm" id="sn" aria-label="Next week">›</button>${rota?`<span class="muted">Rota tab ${esc(rota.week.name)}</span>`:''}</div>`;
+  const sq = await swapQueue();
+  let html = `<div class="card">${head}<h2>My shifts</h2><div id="mysched"></div></div>`;
+  if (sq.length) html += `<div class="card sec"><h2>Swap requests to approve <span class="muted" style="font-weight:500">${sq.length}</span></h2><div id="swq"></div></div>`;
+  html += `<div class="grid g2 sec"><div class="card"><h2>Swap a shift</h2><div id="swform"></div></div><div class="card"><h2>My swaps</h2><div id="swmine"></div></div></div>`;
+  if (isMgr(u)) html += `<div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Full rota</h2><span class="spacer"></span><input id="sq" class="i" style="width:220px" placeholder="Search name or block"></div><div class="tablewrap" id="fullrota"></div></div>`;
+  v.innerHTML = html; wireSched();
+  if (!rota){ $('#mysched').innerHTML = `<div class="empty">There's no rota tab for this week yet. It will appear here once it's added to the rota file.</div>`; }
+  else {
+    const mine = await Promise.all(days.map(d=>S.D.shiftFor(u.row,d)));
+    const found = mine.some(x=>x.rota) ;
+    $('#mysched').innerHTML = found ? `<div class="week">${days.map((d,i)=>{ const m=mine[i]; const ps=parseShift(m.text); return `<div class="${dkey(d)===tk?'today':''} ${ps?'':'off'}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(m.text)}">${esc(ps?ps.label:(m.text||'—'))}</b>${m.swapWith?`<em class="swaptag">Swapped with ${esc(String(m.swapWith).split(/\s+/)[0])}</em>`:''}</div>`; }).join('')}</div>
+      <p class="muted" style="margin:10px 0 0;font-size:13px">Full shift text and tasks are shown when you hover a day.</p>`
+      : `<div class="alert warn" style="margin:0">You aren't in this week's rota under a name the portal recognises. Ask your Duty Manager to set your "Rota Name" in the Access list.</div>`;
+  }
+  if (sq.length) await paintSwapQueue(sq);
+  await swapForm(); await paintMySwaps();
+  if (isMgr(u) && rota){
+    if (!rota.idx) rota.idx = buildRotaIndex((await S.D.access()).rows, rota.people);
+    const cell = (txt,k) => `<td class="${!txt||/^off/i.test(txt)?'off':''} ${k===tk?'today':''}">${esc(txt||'—')}</td>`;
+    const paint=()=>{ const q=norm(($('#sq')||{}).value||''); const list=rota.people.filter(p=>!q||norm(p.name).includes(q)||norm(p.team).includes(q));
+      $('#fullrota').innerHTML = `<table class="sched"><thead><tr><th>Name</th><th>Block</th>${days.map(d=>`<th>${fmtDate(d)}</th>`).join('')}</tr></thead><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="muted">${esc(p.team)}</td>${days.map(d=>cell(p.days[dkey(d)],dkey(d))).join('')}</tr>`).join('')}</tbody></table>`; };
+    paint(); $('#sq').oninput=paint;
+  }
+}
+function wireSched(){ $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
+async function teammates(u){
+  const acc=(await S.D.access()).rows;
+  return acc.filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim()) && r['Portal Role']===u.row['Portal Role'] && (u.row['Manager Email'] ? r['Manager Email']===u.row['Manager Email'] : (u.row.Team && r.Team===u.row.Team))).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
+}
+async function swapForm(){
+  const u=S.me; const mates = await teammates(u); const box=$('#swform');
+  if (!mates.length){ box.innerHTML = `<p class="muted" style="margin:0">Nobody else in your team (${esc(u.row._tl||u.row.Team||'—')}) is set up in the portal yet, so there's no one to swap with.</p>`; return; }
+  const tomorrow = dkey(addDays(new Date(),1));
+  box.innerHTML = `<p class="muted" style="margin:0 0 4px">Swap with someone in your team (${esc(u.row._tl||u.row.Team||'')}). A Duty Manager approves it, then both schedules update.</p>
+    <label class="f">Teammate</label><select id="swwho" class="i">${mates.map(m=>`<option value="${m.Email}">${esc(m['Full Name'])}</option>`).join('')}</select>
+    <div class="row"><div style="flex:1;min-width:140px"><label class="f">Your day</label><input type="date" id="swd1" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div>
+    <div style="flex:1;min-width:140px"><label class="f">Their day</label><input type="date" id="swd2" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div></div>
+    <div id="swprev" style="margin-top:12px"></div>
+    <label class="f">Reason</label><input id="swwhy" class="i" placeholder="Optional">
+    <button class="btn primary big" id="swgo" style="margin-top:14px;width:100%">Send swap request</button>`;
+  const preview = async () => {
+    const B = mates.find(m=>m.Email===$('#swwho').value); const d1=$('#swd1').value, d2=$('#swd2').value; if(!d1||!d2) return;
+    const dates=[...new Set([d1,d2])].sort();
+    const rows = await Promise.all(dates.map(async d=>{ const dt=fromKey(d); return [d,(await S.D.shiftFor(u.row,dt)).text,(await S.D.shiftFor(B,dt)).text]; }));
+    const lbl = t => { const ps=parseShift(t); return ps?ps.label:(t||'not on rota'); };
+    $('#swprev').innerHTML = `<div class="tablewrap"><table><thead><tr><th>Day</th><th>You now</th><th>${esc(String(B['Full Name']).split(/\s+/)[0])} now</th><th>After the swap</th></tr></thead><tbody>${rows.map(([d,a,b])=>`<tr><td>${fmtDate(d)}</td><td>${esc(lbl(a))}</td><td>${esc(lbl(b))}</td><td>You: <b>${esc(lbl(b))}</b></td></tr>`).join('')}</tbody></table></div>
+      ${rows.every(([d,a,b])=>a===b)?'<div class="alert warn" style="margin:10px 0 0">You both have the same shift on these days, so the swap changes nothing.</div>':''}`;
+  };
+  ['swwho','swd1','swd2'].forEach(id=>$('#'+id).onchange=preview); await preview();
+  $('#swgo').onclick = async () => {
+    const B = mates.find(m=>m.Email===$('#swwho').value); const d1=$('#swd1').value, d2=$('#swd2').value;
+    if (!d1||!d2) return toast('Pick both days');
+    const sw = (await S.D.swaps(true)).rows; if (sw.some(r=>r.Status==='Pending' && [r['Requester Email'],r['Teammate Email']].includes(u.email) && [r['Requester Date'],r['Teammate Date']].some(x=>[d1,d2].includes(x)))) return toast('You already have a pending swap on one of these days');
+    $('#swgo').disabled=true;
+    try{
+      await S.D.addSwap({ ID:uid('S'), 'Submitted At':new Date().toISOString(), 'Requester Email':u.email, 'Requester Name':u.name, 'Requester Date':d1, 'Requester Shift':(await S.D.shiftFor(u.row,fromKey(d1))).text, 'Teammate Email':B.Email, 'Teammate Name':B['Full Name'], 'Teammate Date':d2, 'Teammate Shift':(await S.D.shiftFor(B,fromKey(d2))).text, Reason:$('#swwhy').value.trim(), Status:'Pending' });
+      toast('Swap request sent'); viewSchedule();
+    }catch(e){ alertBox(e); $('#swgo').disabled=false; }
+  };
+}
+function swapLine(r, me){
+  const other = r['Requester Email']===me ? r['Teammate Name'] : r['Requester Name'];
+  const same = r['Requester Date']===r['Teammate Date'];
+  const lbl = t => { const ps=parseShift(t); return ps?ps.label:(t||'—'); };
+  return `${same?fmtDate(r['Requester Date']):fmtDate(r['Requester Date'])+' and '+fmtDate(r['Teammate Date'])}: ${esc(r['Requester Name'].split(/\s+/)[0])} ${esc(lbl(r['Requester Shift']))} ⇄ ${esc(r['Teammate Name'].split(/\s+/)[0])} ${esc(lbl(r['Teammate Shift']))}`;
+}
+async function paintMySwaps(){
+  const u=S.me; const list=(await S.D.swaps()).rows.filter(r=>r['Requester Email']===u.email||r['Teammate Email']===u.email).reverse();
+  $('#swmine').innerHTML = list.length ? list.map(r=>`<div class="req ${r.Status==='Declined'?'flag':''}" style="padding:12px 14px"><div class="row"><b style="font-weight:600">${r['Requester Email']===u.email?'With '+esc(r['Teammate Name']):'Requested by '+esc(r['Requester Name'])}</b><span class="spacer"></span>${statusChip(r.Status)}</div>
+    <div class="muted" style="margin-top:4px;font-size:13.5px">${swapLine(r,u.email)}</div>${r.Note?`<div class="muted" style="font-size:13px;margin-top:4px">Duty Manager: ${esc(r.Note)}</div>`:''}
+    ${r.Status==='Pending'&&r['Requester Email']===u.email?`<div style="margin-top:8px"><button class="btn sm" data-swcancel="${r.ID}">Cancel request</button></div>`:''}</div>`).join('') : `<p class="muted" style="margin:0">No swaps yet. Swaps you send, and swaps a teammate sends you, appear here.</p>`;
+  document.querySelectorAll('[data-swcancel]').forEach(b=>b.onclick=async()=>{ b.disabled=true; await S.D.updateSwap(b.dataset.swcancel,{Status:'Cancelled'}); toast('Swap request cancelled'); viewSchedule(); });
+}
+async function paintSwapQueue(list){
+  const acc=(await S.D.access()).rows;
+  $('#swq').innerHTML = list.map(r=>`<div class="req"><div class="row"><b style="font-weight:600">${esc(r['Requester Name'])} ⇄ ${esc(r['Teammate Name'])}</b><span class="chip">${esc((acc.find(x=>x.Email===r['Requester Email'])||{}).Team||'')}</span><span class="spacer"></span><span class="muted" style="font-size:13px">sent ${fmtDate(parseTs(r['Submitted At']))}</span></div>
+    <div style="margin:8px 0">${swapLine(r,'')}</div>${r.Reason?`<div class="muted" style="font-size:13.5px">Reason: ${esc(r.Reason)}</div>`:''}
+    <div class="row" style="margin-top:10px"><input class="i" style="flex:1;min-width:160px" placeholder="Note (optional)" id="sn_${r.ID}"><button class="btn primary" data-swap-ok="${r.ID}">Approve swap</button><button class="btn danger" data-swap-no="${r.ID}">Decline</button></div></div>`).join('');
+  document.querySelectorAll('[data-swap-ok],[data-swap-no]').forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.swapOk||b.dataset.swapNo; const ok=!!b.dataset.swapOk; b.disabled=true;
+    try{ await S.D.updateSwap(id,{Status:ok?'Approved':'Declined','Decided By':S.me.email,'Decided At':new Date().toISOString(),Note:$('#sn_'+id).value.trim()}); toast(ok?'Swap approved':'Swap declined'); }catch(e){ alertBox(e); }
+    render();
+  });
+}
+
+/* ============================ Home ============================ */
+async function viewHome(){
+  const v=$('#view'); const u=S.me; const lim=S.settings.EmergencyLimit;
+  const [st, queue, sq] = await Promise.all([leaveStats(u.row), approvalQueue(), swapQueue()]);
+  const alerts = isMgr(u)? await emergencyAlerts():[];
+  const myPending = (await S.D.requests()).rows.filter(r=>r.Email===u.email&&/^Pending/.test(r.Status)).length;
+  const mon = mondayOf(new Date()); const days=[0,1,2,3,4,5,6].map(i=>addDays(mon,i));
+  const shifts = await Promise.all(days.map(d=>S.D.shiftFor(u.row,d)));
+  const tk = dkey(new Date());
+  v.innerHTML = `
+    ${alerts.length?`<div class="alert bad" data-go="leave" style="cursor:pointer"><b>${alerts.length} ${alerts.length===1?'person is':'people are'} over ${lim} emergency days:</b> ${alerts.slice(0,4).map(a=>esc(a.name)+' ('+a.count+')').join(', ')}${alerts.length>4?' and more':''}. Open Leaves to review.</div>`:''}
+    <div id="board"></div>
+    <div class="metrics sec">
+      <div class="m go" data-go="leave"><h3>Leave remaining</h3><div class="stat">${st.remaining??'—'}<small> days</small></div><p>${st.pendingDays?`${st.pendingDays} days waiting for approval`:`of ${st.allowance??'—'} this year`}</p></div>
+      <div class="m go ${st.emerg>lim?'alert-m':''}" data-go="leave"><h3>Emergency used</h3><div class="stat">${st.emerg}<small> of ${lim}</small></div><p>${st.emerg>lim?'over the limit':`${Math.max(0,lim-st.emerg)} left`}</p></div>
+      ${isMgr(u)
+        ? `<div class="m go" data-go="${!queue.length&&sq.length?'sched':'leave'}"><h3>Waiting for you</h3><div class="stat" style="${queue.length+sq.length?'color:var(--warn)':''}">${queue.length+sq.length}</div><p>${queue.length||sq.length?[queue.length?queue.length+' leave':'',sq.length?sq.length+' swap':''].filter(Boolean).join(' and ')+' to approve':'nothing to approve'}</p></div>`
+        : `<div class="m go" data-go="leave"><h3>My requests</h3><div class="stat">${myPending}</div><p>${myPending?'waiting for approval':'none pending'}</p></div>`}
+    </div>
+    <div class="row sec" style="margin-bottom:10px"><h2 style="margin:0;font-size:17px;font-weight:600">This week</h2><span class="spacer"></span><button class="btn sm" data-go="sched">Full schedule</button></div>
+    <div class="week">${days.map((d,i)=>{ const t=shifts[i].text; const ps=parseShift(t); const off=!ps; return `<div class="${dkey(d)===tk?'today':''} ${off?'off':''}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(t)}">${esc(ps?ps.label:(t||'—'))}</b></div>`; }).join('')}</div>`;
+  document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.go; render(); });
+  await mountBoard($('#board'));
+}
+
+/* ============================ Admin (Access list) ============================ */
+async function viewAdmin(){
+  const v=$('#view'); const t=await S.D.access(true);
+  v.innerHTML = `<div class="card"><div class="row"><h2 style="margin:0">People</h2><span class="spacer"></span><input id="adq" class="i" style="width:220px" placeholder="Search"><select id="adr" class="i" style="width:auto"><option value="">All roles</option><option value="none">No role yet</option>${ROLES.map(r=>`<option>${r}</option>`).join('')}</select><button class="btn primary" id="adnew">Add person</button></div>
+    <p class="muted">Everyone who can open the portal. This is the same list as the Access tab in "GTO Portal Data.xlsx", so you can edit it in either place.</p><div class="tablewrap" id="adt"></div></div>`;
+  const paint=()=>{ const q=norm($('#adq').value), rf=$('#adr').value;
+    const list=t.rows.filter(r=>(!q||norm(r['Full Name']+' '+r.Email+' '+r.Team).includes(q)) && (!rf||(rf==='none'?!ROLES.includes(r['Portal Role']):r['Portal Role']===rf)));
+    $('#adt').innerHTML = `<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Team leader</th><th>Team</th><th>Active</th><th></th></tr></thead>${list.map(r=>`<tr><td>${esc(r['Full Name'])}</td><td>${esc(r.Email)||'<span class="chip warn">missing</span>'}</td><td>${ROLES.includes(r['Portal Role'])?esc(r['Portal Role']):'<span class="chip warn">none</span>'}</td><td class="muted">${esc(r._tl||(t.rows.find(x=>x.Email===r['Manager Email'])||{})['Full Name']||r['Manager Email'])}</td><td>${esc(r.Team)}</td><td>${/^no$/i.test(String(r.Active||'').trim())?'<span class="chip bad">No</span>':'<span class="chip ok">Yes</span>'}</td><td><button class="btn sm" data-ed="${r._i}">Edit</button></td></tr>`).join('')}</table>`;
+    document.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>editPerson(t.rows.find(x=>x._i===+b.dataset.ed)));
+  };
+  paint(); $('#adq').oninput=paint; $('#adr').onchange=paint; $('#adnew').onclick=()=>editPerson(null);
+}
+function editPerson(r){
+  const t=S.D.cache.access; const isNew=!r; r = r || {Active:'Yes','Portal Admin':'No'};
+  const mgrs=t.rows.filter(x=>x.Email && ['Team Leader','Duty Manager','General Manager','HR'].includes(x['Portal Role']));
+  const f=(k,label,inp)=>`<label class="f">${label}</label>${inp||`<input class="i" data-k="${k}" value="${esc(r[k]??'')}">`}`;
+  modal(`<h2>${isNew?'Add person':esc(r['Full Name'])}</h2>
+    ${f('Email','Work email')}${f('Full Name','Full name (exactly as in the Leaves Tracker)')}
+    ${f('Portal Role','Portal role',`<select class="i" data-k="Portal Role"><option value="">—</option>${ROLES.map(x=>`<option ${r['Portal Role']===x?'selected':''}>${x}</option>`).join('')}</select>`)}
+    ${f('Team Leader','Team leader',`<select class="i" data-k="Team Leader"><option value="">—</option>${t.rows.filter(x=>['Team Leader','Duty Manager','General Manager','HR'].includes(x['Portal Role'])).map(x=>`<option value="${esc(x['Full Name'])}" ${norm(r._tl||r['Team Leader'])===norm(x['Full Name'])?'selected':''}>${esc(x['Full Name'])} (${esc(x['Portal Role'])})</option>`).join('')}</select>`)}
+    ${f('Team','Team')}${f('Tracker Role','Role written in the Leaves Tracker (e.g. Enquiry Agent)')}${f('Rota Name','Name in the rota (only if not found automatically)')}
+    <div class="row">${f('Portal Admin','Portal admin',`<select class="i" data-k="Portal Admin"><option ${yes(r['Portal Admin'])?'':'selected'}>No</option><option ${yes(r['Portal Admin'])?'selected':''}>Yes</option></select>`)}${f('Active','Active',`<select class="i" data-k="Active"><option ${/^no$/i.test(String(r.Active||''))?'':'selected'}>Yes</option><option ${/^no$/i.test(String(r.Active||''))?'selected':''}>No</option></select>`)}</div>
+    <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="psave">Save</button></div>`);
+  $('#psave').onclick=async()=>{
+    const o={...r}; delete o._tl; document.querySelectorAll('.modal [data-k]').forEach(i=>o[i.dataset.k]=i.value.trim());
+    o.Email=normEmail(o.Email); if(!o['Full Name']) return toast('Name is required');
+    const tlRow = t.rows.find(x=>norm(x['Full Name'])===norm(o['Team Leader'])); o['Manager Email'] = tlRow ? tlRow.Email : '';
+    $('#psave').disabled=true;
+    try{ if(isNew) await S.D.addAccess(o); else await S.D.updateAccess(o); closeModal(); toast('Saved'); viewAdmin(); }catch(e){ alertBox(e); $('#psave').disabled=false; }
+  };
+}
+
+/* ============================ modal / errors ============================ */
+function modal(html){ closeModal(); const m=document.createElement('div'); m.className='modal'; m.innerHTML=`<div class="card">${html}</div>`; m.onclick=e=>{ if(e.target===m||e.target.hasAttribute('data-close')) closeModal(); }; document.body.appendChild(m); }
+function closeModal(){ document.querySelectorAll('.modal').forEach(m=>m.remove()); }
+function alertBox(e){ console.error(e); modal(`<h2>Couldn't save</h2><div class="alert bad">${esc(e.message||e)}</div><div class="row"><span class="spacer"></span><button class="btn" data-close>OK</button></div>`); }
+
+boot();
+</script>
+</body>
+</html>
