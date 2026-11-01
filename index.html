@@ -269,6 +269,8 @@ input[type=checkbox]{accent-color:var(--gold)}
 .ai-msg.a p{margin:0 0 8px}.ai-msg.a p:last-child,.ai-msg.a ul:last-child{margin-bottom:0}.ai-msg.a ul{margin:0 0 8px;padding-left:18px}.ai-msg.a li{margin:2px 0}
 .ai-msg.a h4{margin:6px 0 4px;font-size:14.5px;color:var(--gold)}
 .ai-msg.err{border-color:rgba(255,138,128,.4);color:var(--bad)}
+.ai-follow{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 2px;max-width:92%}.ai-follow button{border:1px solid rgba(227,185,90,.4);background:rgba(227,185,90,.08);color:var(--gold);border-radius:999px;padding:5px 11px;font-size:12.5px;cursor:pointer}.ai-follow button:hover{background:rgba(227,185,90,.18)}
+.ai-msg{unicode-bidi:plaintext}.ai-msg p,.ai-msg li{unicode-bidi:plaintext;text-align:start}
 .ai-ref{display:inline;border:0;background:rgba(227,185,90,.14);color:var(--gold);border-radius:6px;padding:0 6px;cursor:pointer;font:inherit;font-weight:600}
 .ai-ref:hover{background:rgba(227,185,90,.26)}
 .ai-dots{display:inline-flex;gap:4px}.ai-dots i{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:aid 1s infinite ease-in-out}.ai-dots i:nth-child(2){animation-delay:.15s}.ai-dots i:nth-child(3){animation-delay:.3s}
@@ -1519,7 +1521,8 @@ async function viewKb(){
         <p class="muted" style="font-size:12.5px;margin-top:18px">Source: ${kb.source==='live'?'live Promotions & Products workbook':esc(kb.source.startsWith('backup')?'backup copy ('+kb.source.slice(7)+') — the live workbook could not be opened':kb.source)} · refreshed ${new Date(kb.loadedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</p>
       </div>
       <aside class="kb-side"><div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0;font-size:18px">Updates</h2><span class="spacer"></span>${kb.canPost?'<button class="btn sm primary" id="kbpost">Post update</button>':''}</div>
-        <div id="kbups"></div></div></aside>
+        <div id="kbups"></div></div>
+        ${kb.seesLog?`<div class="card" style="margin-top:14px"><h2 style="margin:0 0 4px;font-size:16px">Questions GTO Assist couldn't answer</h2><p class="muted" style="margin:0 0 8px;font-size:12.5px">Add the missing details to the knowledge base sheet so it can answer them next time.</p><div id="kblog" class="muted" style="font-size:13.5px">Loading…</div></div>`:''}</aside>
     </div>
     <button class="ai-fab" id="aifab">${KBI.spark}<span>Ask GTO Assist</span></button>`;
   const paint = () => {
@@ -1556,6 +1559,8 @@ async function viewKb(){
   $('#kbpost') && ($('#kbpost').onclick=kbPostForm);
   $('#aifab').onclick=()=>aiOpen();
   paint(); paintUps();
+  if (kb.seesLog && S.D instanceof ApiData) S.D.call('GET','asklog').then(r=>{ const el=$('#kblog'); if (!el || S.renderId!==myRender) return; el.innerHTML = r.rows.length ? r.rows.slice(0,15).map(x=>`<div class="kb-up" style="padding:9px 0"><div style="color:var(--ink);font-size:13.5px;unicode-bidi:plaintext">${esc(x.Question)}</div><div class="by">${esc(x.Name||x.Email)} · ${fmtDate(parseTs(x['Asked At']))} · ${esc(x['Answer Type'])}</div></div>`).join('') : 'None so far.'; }).catch(()=>{ const el=$('#kblog'); if (el) el.textContent='Not available.'; });
+  else if ($('#kblog')) $('#kblog').textContent='None so far.';
   if (S.kbOpen){ const id=S.kbOpen; S.kbOpen=null; kbDetail(id); }
 }
 function kbDetail(id){
@@ -1601,9 +1606,9 @@ function kbPostForm(){
 }
 
 /* ---- GTO Assist chat ---- */
-const AI_SUGG = ['What are the newest offers and are any still on sale?','What is the minimum purchase for Flight Club?','Can a member book for someone else with the Magic Pass?','Which offers cover non-refundable hotels?'];
+const AI_SUGG = ['What offers are on sale now?','Magic Pass expiry','Can a member book for someone else with the Holiday Pass?','Which offers cover non-refundable hotels?','فلايت كلوب أقل مبلغ كام؟'];
 function aiMd(text){
-  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\[\[([^\]]+)\]\]/g,(m,n)=>{ const it=(S._kb?.items||[]).find(i=>norm(i.name)===norm(n))||(S._kb?.items||[]).find(i=>norm(i.name).startsWith(norm(n))||norm(n).startsWith(norm(i.name))); return it?`<button class="ai-ref" data-ref="${esc(it.id)}">${esc(n)}</button>`:`<b>${esc(n)}</b>`; })
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/(^|[\s(])_([^_]{2,80})_(?=$|[\s.,)])/g,'$1<i style="color:var(--faint);font-size:12.5px">$2</i>').replace(/\[\[([^\]]+)\]\]/g,(m,n0)=>{ const n=n0.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'"); const it=(S._kb?.items||[]).find(i=>norm(i.name)===norm(n))||(S._kb?.items||[]).find(i=>norm(i.name).startsWith(norm(n))||norm(n).startsWith(norm(i.name))); return it?`<button class="ai-ref" data-ref="${esc(it.id)}">${esc(n)}</button>`:`<b>${esc(n)}</b>`; })
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,(m,p,u)=>`${p}<a href="${u.replace(/[.,]+$/,'')}" target="_blank" rel="noopener">${u}</a>`);
   const out=[]; let list=null;
   String(text).split('\n').forEach(line=>{ const l=line.trim(); const b=l.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
@@ -1616,16 +1621,17 @@ function aiMd(text){
 function aiOpen(prefill, send){
   let p=$('#aipanel');
   if (!p){ p=document.createElement('div'); p.id='aipanel'; p.className='ai-panel'; p.setAttribute('role','dialog'); p.setAttribute('aria-label','GTO Assist');
-    p.innerHTML=`<div class="ai-head"><div class="ic">${KBI.spark}</div><div><b>GTO Assist</b><span>Answers from the GTO knowledge base</span></div><button aria-label="Close" id="aiclose">×</button></div>
+    p.innerHTML=`<div class="ai-head"><div class="ic">${KBI.spark}</div><div><b>GTO Assist</b><span>Answers straight from the GTO knowledge base</span></div><button aria-label="Close" id="aiclose">×</button></div>
       <div class="ai-body" id="aibody"></div>
       <div class="ai-foot"><div class="ai-in"><textarea id="aiq" rows="1" placeholder="Ask about an offer, product or rule…"></textarea><button id="aisend" aria-label="Send">${KBI.send}</button></div>
       <div class="ai-note"><span>Check important details in the T&amp;Cs before confirming with a member.</span><button id="aiclear">New chat</button></div></div>`;
     document.body.appendChild(p);
     $('#aiclose').onclick=()=>p.classList.remove('open');
-    $('#aiclear').onclick=()=>{ S.aiChat=[]; aiPaint(); };
+    $('#aiclear').onclick=()=>{ S.aiChat=[]; S.aiCtx=null; aiPaint(); };
     const q=$('#aiq'); q.oninput=()=>{ q.style.height='auto'; q.style.height=Math.min(140,q.scrollHeight)+'px'; };
     q.onkeydown=e=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); aiSend(); } };
     $('#aisend').onclick=()=>aiSend();
+    $('#aiq').setAttribute('dir','auto');
     document.addEventListener('keydown', e=>{ if (e.key==='Escape') p.classList.remove('open'); });
   }
   S.aiChat = S.aiChat || []; aiPaint();
@@ -1635,21 +1641,23 @@ function aiOpen(prefill, send){
 }
 function aiPaint(){
   const b=$('#aibody'); if (!b) return; const kb=S._kb||{};
-  b.innerHTML = (S.aiChat.length ? '' : `<div class="ai-msg a"><p>Hi ${esc(String(S.me.name).split(/\s+/)[0])} 👋 I can answer questions about GTO promotions, products, vouchers and passes — discounts, dates, what they cover, restrictions and T&amp;Cs.</p>${kb.ai===false?'<p style="color:var(--warn)">The assistant isn\'t switched on yet: a portal admin needs to add the AI key. Search still works.</p>':''}</div><div class="ai-sugg">${AI_SUGG.map(s=>`<button data-sg="${esc(s)}">${esc(s)}</button>`).join('')}</div>`)
-    + S.aiChat.map(m=>m.role==='user'?`<div class="ai-msg u">${esc(m.content)}</div>`:`<div class="ai-msg a ${m.err?'err':''}">${m.err?esc(m.content):aiMd(m.content)}</div>`).join('')
+  b.innerHTML = (S.aiChat.length ? '' : `<div class="ai-msg a"><p>Hi ${esc(String(S.me.name).split(/\s+/)[0])} 👋 Ask me about any GTO promotion, product, voucher or pass: discounts, dates, minimum purchase, expiry, what it covers, booking for others, restrictions and T&amp;Cs. English or Arabic.</p><p style="color:var(--muted);font-size:13px">Tip: name the offer, e.g. “Magic Pass expiry”. Follow-up questions like “is it refundable?” stay on the same offer.</p></div><div class="ai-sugg">${AI_SUGG.map(s=>`<button data-sg="${esc(s)}">${esc(s)}</button>`).join('')}</div>`)
+    + S.aiChat.map((m,i)=>m.role==='user'?`<div class="ai-msg u">${esc(m.content)}</div>`:`<div class="ai-msg a ${m.err?'err':''}">${m.err?esc(m.content):aiMd(m.content)}</div>${!m.err&&i===S.aiChat.length-1&&m.follow&&m.follow.length&&!S.aiBusy?`<div class="ai-follow">${m.follow.map((f,k)=>`<button data-fu="${k}">${esc(f.label)}</button>`).join('')}</div>`:''}`).join('')
     + (S.aiBusy?'<div class="ai-msg a"><span class="ai-dots"><i></i><i></i><i></i></span></div>':'');
   b.querySelectorAll('[data-sg]').forEach(x=>x.onclick=()=>{ $('#aiq').value=x.dataset.sg; aiSend(); });
+  b.querySelectorAll('[data-fu]').forEach(x=>x.onclick=()=>{ const f=S.aiChat[S.aiChat.length-1].follow[+x.dataset.fu]; $('#aiq').value=f.q; aiSend(f.item); });
   b.querySelectorAll('[data-ref]').forEach(x=>x.onclick=()=>{ if (S.tab!=='kb'){ S.kbOpen=x.dataset.ref; S.tab='kb'; render(); } else kbDetail(x.dataset.ref); });
   b.scrollTop=b.scrollHeight; const s=$('#aisend'); if (s) s.disabled=!!S.aiBusy;
 }
-async function aiSend(){
+async function aiSend(item){
   const q=$('#aiq'); const text=q.value.trim(); if (!text || S.aiBusy) return;
   q.value=''; q.style.height='auto'; S.aiChat.push({ role:'user', content:text }); S.aiBusy=true; aiPaint();
   try {
     if (!S._kb) await kbData();
     if (!(S.D instanceof ApiData)) throw new Error('The assistant only works in the live portal.');
-    const r = await S.D.call('POST','ask',{ messages:S.aiChat.filter(m=>!m.err).map(m=>({ role:m.role, content:m.content })) });
-    S.aiChat.push({ role:'assistant', content:r.answer||'(no answer)' });
+    const r = await S.D.call('POST','ask',{ question:text, ctx:S.aiCtx||null, item:typeof item==='string'?item:null, messages:S.aiChat.filter(m=>!m.err).map(m=>({ role:m.role, content:m.content })) });
+    if (r.item) S.aiCtx = r.item;
+    S.aiChat.push({ role:'assistant', content:r.answer||'(no answer)', follow:r.follow||[] });
   } catch(e){ S.aiChat.push({ role:'assistant', content:e.message, err:true }); }
   S.aiBusy=false; aiPaint();
 }

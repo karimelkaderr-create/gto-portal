@@ -2,6 +2,7 @@
 // The Excel files are the database. Only the opsportal account can open them;
 // staff never get file access. Every request is checked against the Access list.
 import crypto from 'node:crypto';
+import { buildIndex, answer as localAnswer } from './assist.js';
 const blob = () => globalThis.__blobMock || import('@vercel/blob');
 
 const CLIENT_ID = process.env.CLIENT_ID || 'b57c476e-4a3e-498c-a114-2aa2638997d0';
@@ -15,7 +16,7 @@ const URLS = {
   kb: process.env.KB_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCj174EGyAtQ6clqACoLu_yAaSPnXTVoMmSdINHGakVWRU',
 };
 const AI_KEY = process.env.ANTHROPIC_API_KEY || '';
-const AI_MODEL = process.env.AI_MODEL || 'claude-sonnet-5-5';
+const AI_MODEL = process.env.AI_MODEL || 'claude-haiku-5-5';
 const TRACKER_TABLE = process.env.TRACKER_TABLE || 'Table1';
 const BALANCE_SHEET = process.env.BALANCE_SHEET || 'Balance';
 const T = { access: 'tblAccess', att: 'tblAttendance', req: 'tblRequests', set: 'tblSettings', swap: 'tblSwaps' };
@@ -498,13 +499,13 @@ function datesIn(text, fallbackYear) {
 function kbValue(v, field) {
   if (typeof v === 'number') {
     if (v > 20000 && v < 80000) { const d = serialToDate(v); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
-    if (v > 0 && v <= 1 && /discount|rate|benefit/i.test(field)) return Math.round(v * 1000) / 10 + '%';
+    if (v > 0 && v <= 1 && /discount|rate|benefit|hotels|flights|attraction|theme|quotation/i.test(field)) return Math.round(v * 1000) / 10 + '%';
     return String(v);
   }
   return String(v ?? '').replace(/\r/g, '').replace(/\u00a0|\u202f/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 const KB_COVER = [['Refundable hotels', /^refundable hotels/i], ['Non-refundable hotels', /^nr hotels/i], ['International flights', /^international flights/i], ['Domestic flights', /^domestic flights/i], ['Attractions & transfers', /^attraction/i], ['Theme parks & car rental', /^theme parks/i]];
-function kbCover(v) { const s = String(v || '').trim().toLowerCase(); if (!s) return null; if (/^(x|no|n|✗|×|-|_|none|not)\b/.test(s)) return false; if (/^(yes|y|✓|✔|ok|included|all)\b/.test(s)) return true; return null; }
+function kbCover(v) { const s = String(v || '').trim().toLowerCase(); if (!s || /^[-_—.]+$/.test(s)) return null; if (/^(x|no|n|✗|×|none|not)\b/.test(s)) return false; return true; }
 function kbStatus(item, neighbourYear) {
   const all = Object.values(item.fields).join(' ').toLowerCase(); const offer = item.fields['Offer Period'] || '';
   const nameYear = (String(item.name).match(/20(2\d)/) || String(item.name).match(/\/(2\d)\b/) || [])[1];
@@ -570,7 +571,7 @@ async function loadUpdates() { await ensureTable(URLS.portal, 'Updates', 'tblUpd
 const canPost = u => u.admin || ['Team Leader', 'Duty Manager', 'General Manager', 'HR', 'Quality'].includes(u.role);
 async function readKb(u) {
   const [kb, up] = await Promise.all([loadKb(), cached('updates', 30e3, loadUpdates)]);
-  return { ...kb, updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))), canPost: canPost(u), ai: !!AI_KEY };
+  return { ...kb, updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))), canPost: canPost(u), ai: true, aiPlus: !!AI_KEY, seesLog: ['Duty Manager', 'General Manager', 'Quality'].includes(u.role) || u.admin || yes(u.row['Quality Team']) };
 }
 async function doUpdate(u, b) {
   if (!canPost(u)) deny('Only team leaders and managers can post updates.');
@@ -584,38 +585,50 @@ async function doUpdate(u, b) {
 function kbText(items) {
   return items.map(i => `### ${i.name}\n[${i.cat} · ref ${i.id}${i.status ? ' · ' + i.status + (i.end ? ' (offer ends ' + i.end + ')' : '') : ''}]\n` + Object.entries(i.fields).filter(([k]) => !/promotion details/i.test(k)).map(([k, v]) => `${k}: ${v}`).join('\n')).join('\n\n');
 }
-const askLog = {};
-async function doAsk(u, b) {
-  if (!AI_KEY) throw new HttpError(503, 'The assistant is not switched on yet. A portal admin needs to add the AI key in Vercel.');
-  const now = Date.now(); askLog[u.email] = (askLog[u.email] || []).filter(t => now - t < 3600e3); if (askLog[u.email].length >= 60) throw new HttpError(429, 'You have asked a lot of questions this hour. Please try again shortly.'); askLog[u.email].push(now);
-  const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 3000) })).filter(m => m.content);
-  while (msgs.length && msgs[0].role !== 'user') msgs.shift(); if (!msgs.length || msgs.at(-1).role !== 'user') bad('Ask a question.');
+const askLog = {}; let ixCache = null;
+const ASKLOG_HEADERS = ['ID', 'Asked At', 'Email', 'Name', 'Question', 'Answer Type'];
+async function assistIndex() {
   const [kb, up] = await Promise.all([loadKb(), cached('updates', 30e3, loadUpdates)]);
-  const updates = up.rows.filter(r => !isNo(r.Active)).slice(-30).map(r => `- ${String(r['Posted At']).slice(0, 10)} · ${r.Title}: ${r.Body}`).join('\n');
+  const ups = up.rows.filter(r => !isNo(r.Active));
+  const key = kb.loadedAt + '|' + ups.map(r => r.ID).join(',');
+  if (!ixCache || ixCache.key !== key) ixCache = { key, ix: buildIndex(kb.items, ups), kb, ups };
+  return ixCache;
+}
+async function logQuestion(u, q, type) {
+  try { await ensureTable(URLS.portal, 'Assistant Log', 'tblAskLog', ASKLOG_HEADERS); await addRow(URLS.portal, 'tblAskLog', [uid('Q'), new Date().toISOString(), u.email, u.name, q.slice(0, 500), type]); }
+  catch (e) { console.error('ask log', e.message); }
+}
+async function doAsk(u, b) {
+  const now = Date.now(); askLog[u.email] = (askLog[u.email] || []).filter(t => now - t < 3600e3); if (askLog[u.email].length >= 200) throw new HttpError(429, 'You have asked a lot of questions this hour. Please try again shortly.'); askLog[u.email].push(now);
+  const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 3000) })).filter(m => m.content);
+  const q = String(b.question || (msgs.length && msgs.at(-1).role === 'user' ? msgs.at(-1).content : '')).trim().slice(0, 1000);
+  if (q.length < 2) bad('Ask a question.');
+  const { ix, kb, ups } = await assistIndex();
+  const local = localAnswer(ix, q, { ctx: b.ctx ? String(b.ctx) : null, item: b.item ? String(b.item) : null });
+  // GTO Assist answers on its own; an AI key (optional) is only used for questions it isn't sure about
+  if (local.conf < 0.5) await logQuestion(u, q, local.conf <= 0.1 ? 'Not found' : 'Partial');
+  if (AI_KEY && local.conf < 0.6 && msgs.length) {
+    try { const ai = await askClaude(u, msgs, kb, ups); return { ...ai, engine: 'ai', item: local.item, follow: [] }; } catch (e) { console.error('AI fallback failed', e.message); }
+  }
+  return { answer: local.answer, refs: local.refs, follow: local.follow, item: local.item, conf: local.conf, engine: 'local' };
+}
+async function readAskLog(u) {
+  if (!(['Duty Manager', 'General Manager', 'Quality'].includes(u.role) || u.admin || yes(u.row['Quality Team']))) deny();
+  if (!(await tableExists(URLS.portal, 'tblAskLog'))) return { rows: [] };
+  const t = await table(URLS.portal, 'tblAskLog'); return { rows: t.rows.filter(r => r.ID).map(r => ({ ...r, 'Asked At': tsString(r['Asked At']) })).reverse().slice(0, 100) };
+}
+async function askClaude(u, msgs, kb, ups) {
+  while (msgs.length && msgs[0].role !== 'user') msgs.shift();
+  const updates = ups.slice(-30).map(r => `- ${String(r['Posted At']).slice(0, 10)} · ${r.Title}: ${r.Body}`).join('\n');
   const sys = [
-    { type: 'text', text: `You are GTO Assist, the internal knowledge assistant for customer-service agents at GTO (Global Travel Organisation), a members' travel club. Agents ask you about GTO promotions, products, vouchers, passes, memberships and their terms while they are helping members.
-
-How to answer:
-- Answer ONLY from the knowledge base and team updates provided below. If the answer is not there, say clearly that it isn't in the knowledge base and suggest the agent checks with their team leader or duty manager. Never invent percentages, dates, prices, links or rules.
-- Be short and practical: lead with the direct answer, then the key conditions (discount, offer period, booking/activation period, expiry, what it covers, restrictions, minimum purchase, refundability, booking for others). Use short bullet points.
-- Always name the offer(s) you used, written exactly as [[Offer name]] so the portal can link them.
-- Offers are listed in the order they were added; later entries are newer. Several offers share similar names (e.g. many "Magic Pass" or "Holiday Pass" versions) — if the question is ambiguous, give the most recent version first and mention that older versions exist, or ask which one the member bought.
-- Pay attention to whether an offer is still on sale compared with today's date, and say so. An offer that has stopped selling can still have active bookings, so distinguish "can still be bought" from "rules for members who already bought it".
-- If an entry says it is confidential or for selected members only, remind the agent of that.
-- Include the T&Cs link when it is relevant.
-- Reply in the language the agent writes in (English or Arabic).
-
-KNOWLEDGE BASE (${kb.items.length} entries, source: ${kb.source}):
-
-${kbText(kb.items)}`, cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: `Today is ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Cairo' })}. The agent asking is ${u.name} (${u.role}).\n\nRecent team updates posted in the portal (newer at the bottom):\n${updates || '(none)'}` }
+    { type: 'text', text: `You are GTO Assist, the internal knowledge assistant for customer-service agents at GTO (Global Travel Organisation), a members' travel club. Answer ONLY from the knowledge base and team updates below; if the answer is not there, say so and suggest checking with the team leader or duty manager. Never invent percentages, dates, prices, links or rules. Be short: lead with the direct answer, then key conditions as bullets. Name the offer(s) used exactly as [[Offer name]]. Later entries are newer; if several versions share a name, use the newest and mention older ones. Say whether an offer is still on sale compared with today's date. Flag confidential / selected-members offers. Reply in the agent's language (English or Arabic).\n\nKNOWLEDGE BASE (${kb.items.length} entries, source: ${kb.source}):\n\n${kbText(kb.items)}`, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: `Today is ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Cairo' })}. The agent asking is ${u.name} (${u.role}).\n\nRecent team updates:\n${updates || '(none)'}` }
   ];
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': AI_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: AI_MODEL, max_tokens: 1500, system: sys, messages: msgs }) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) { console.error('AI error', r.status, JSON.stringify(j).slice(0, 400)); throw new HttpError(502, 'The assistant could not answer right now' + (j.error?.message ? ': ' + j.error.message : '') + '.'); }
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error?.message || 'AI error ' + r.status);
   const text = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-  const refs = [...new Set([...text.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1].trim()))].map(n => (kb.items.find(i => norm(i.name) === norm(n)) || kb.items.find(i => norm(i.name).startsWith(norm(n)) || norm(n).startsWith(norm(i.name))) || {}).id).filter(Boolean);
-  return { answer: text, refs };
+  const refs = [...new Set([...text.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1].trim()))].map(n => (kb.items.find(i => norm(i.name) === norm(n)) || {}).id).filter(Boolean);
+  return { answer: text, refs, conf: 0.9 };
 }
 
 /* ---------------- one-time setup for the opsportal account ---------------- */
@@ -669,6 +682,7 @@ export default async function handler(req, res) {
       case 'kb': out = await readKb(u); break;
       case 'update': out = await doUpdate(u, b); break;
       case 'ask': out = await doAsk(u, b); break;
+      case 'asklog': out = await readAskLog(u); break;
       default: throw new HttpError(404, 'Unknown request.');
     }
     ({ att: ['att'], req: ['req'], decide: ['req', 'tracker'], cancel: ['req'], retry: ['req', 'tracker'], swap: ['swaps'], swapdecide: ['swaps'], swapcancel: ['swaps'], access: ['access'], update: ['updates'] }[route] || []).forEach(k => forget(k));
