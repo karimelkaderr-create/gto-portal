@@ -717,7 +717,7 @@ async function boot(){
       const acc = await initAuth(); if (!acc) return;
       S.D = new ApiData();
       try { await S.D.load(); }
-      catch(e){ if (e.status===403){ $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(e.message)}</p><button class="btn" onclick="msalApp.logoutRedirect()">Sign in with a different account</button></div></main>`; return; } throw e; }
+      catch(e){ if (e.status===403){ $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(e.message)}</p><button class="btn" onclick="msalApp.loginRedirect({ scopes:SCOPES, prompt:'select_account' })">Use a different account</button></div></main>`; return; } throw e; }
       email = S.D.me.email;
     }
     S.settings = await S.D.settings();
