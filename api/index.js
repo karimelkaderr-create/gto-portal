@@ -81,8 +81,14 @@ const KEY = () => crypto.createHash('sha256').update('gto-portal-token:' + SECRE
 function enc(obj) { const iv = crypto.randomBytes(12); const c = crypto.createCipheriv('aes-256-gcm', KEY(), iv); const data = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]); return Buffer.concat([iv, c.getAuthTag(), data]).toString('base64'); }
 function dec(s) { const b = Buffer.from(s, 'base64'); const d = crypto.createDecipheriv('aes-256-gcm', KEY(), b.subarray(0, 12)); d.setAuthTag(b.subarray(12, 28)); return JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8')); }
 const TOKEN_PATH = 'auth/ops-token.txt';
-async function saveRT(rt) { const { put } = await blob(); await put(TOKEN_PATH, enc({ rt, at: Date.now() }), { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain', cacheControlMaxAge: 60 }); }
-async function loadRT() { const { list } = await blob(); const { blobs } = await list({ prefix: TOKEN_PATH }); if (!blobs.length) return null; const t = await (await fetch(blobs[0].url + '?v=' + Date.now(), { cache: 'no-store' })).text(); try { return dec(t).rt; } catch (e) { return null; } }
+async function saveRT(rt) { const { put } = await blob(); await put(TOKEN_PATH, enc({ rt, at: Date.now() }), { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain' }); }
+async function loadRT() {
+  const { get } = await blob(); let r;
+  try { r = await get(TOKEN_PATH, { access: 'private', useCache: false }); } catch (e) { if (/not.?found/i.test(e.name + e.message)) return null; throw e; }
+  if (!r) return null;
+  const body = r.stream ? await new Response(r.stream).text() : typeof r.text === 'function' ? await r.text() : String(r);
+  try { return dec(body).rt; } catch (e) { return null; }
+}
 let opsCache = null;
 async function opsToken() {
   if (opsCache && opsCache.exp > Date.now() + 60e3) return opsCache.token;
