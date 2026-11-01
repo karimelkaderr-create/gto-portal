@@ -369,7 +369,7 @@ function matchPerson(name, acc) {
   for (const r of acc.rows) {
     const full = norm(r['Full Name']).split(' '); if (full[0] !== toks[0] && !(toks[0].length >= 5 && lev1(toks[0], full[0]))) continue;
     if (!toks.slice(1).every(t => full.slice(1).some(f => f === t || (t.length > 3 && f.length > 3 && (f.startsWith(t) || t.startsWith(f) || lev1(t, f)))))) continue;
-    const sc = toks.length; if (sc > bs) { bs = sc; best = r; tie = false; } else if (sc === bs) tie = true;
+    const sc = toks.length + (full[0] === toks[0] ? 0.5 : 0); if (sc > bs) { bs = sc; best = r; tie = false; } else if (sc === bs) tie = true;
   }
   return tie ? null : best;
 }
