@@ -106,9 +106,18 @@ async function opsToken() {
 
 /* ---------------- Graph / Excel ---------------- */
 const books = {};
-async function g(method, path, body, tries = 0) {
-  const res = await fetch('https://graph.microsoft.com/v1.0' + path, { method, headers: { Authorization: 'Bearer ' + await opsToken(), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  if ([429, 409, 503, 504].includes(res.status) && tries < 4) { await new Promise(r => setTimeout(r, 700 * (tries + 1))); return g(method, path, body, tries + 1); }
+const sessions = {}; // workbook base -> { id, at }
+async function sessionFor(base) {
+  const s = sessions[base]; if (s && Date.now() - s.at < 4 * 60e3) { s.at = Date.now(); return s.id; }
+  try { const r = await g('POST', base + '/createSession', { persistChanges: true }, 0, true); sessions[base] = { id: r.id, at: Date.now() }; return r.id; } catch (e) { return null; }
+}
+async function g(method, path, body, tries = 0, noSession = false) {
+  const wb = !noSession && path.match(/^(\/drives\/[^/]+\/items\/[^/]+\/workbook)\//);
+  const sid = wb ? await sessionFor(wb[1]) : null;
+  const headers = { Authorization: 'Bearer ' + await opsToken(), 'Content-Type': 'application/json' }; if (sid) headers['workbook-session-id'] = sid;
+  const res = await fetch('https://graph.microsoft.com/v1.0' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (sid && (res.status === 404 || res.status === 400) && tries < 1) { const txt = await res.clone().text(); if (/session/i.test(txt)) { delete sessions[wb[1]]; return g(method, path, body, tries + 1, noSession); } }
+  if ([429, 409, 503, 504].includes(res.status) && tries < 4) { await new Promise(r => setTimeout(r, 700 * (tries + 1))); return g(method, path, body, tries + 1, noSession); }
   if (!res.ok) { let t = ''; try { t = (await res.json()).error?.message || ''; } catch (e) { } throw new HttpError(502, `Excel: ${t || res.statusText}`); }
   return res.status === 204 ? null : res.json();
 }
@@ -145,8 +154,14 @@ async function sheetText(url, sheet) {
 }
 async function sheetValues(url, sheet) { const b = await book(url); return (await g('GET', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')/usedRange(valuesOnly=true)?$select=values`)).values; }
 
+/* ---------------- short-lived memory cache (per server instance) ---------------- */
+const memo = {};
+async function cached(key, ttlMs, fn) { const c = memo[key]; if (c && Date.now() - c.at < ttlMs) return structuredClone(c.v); const v = await fn(); memo[key] = { at: Date.now(), v }; return structuredClone(v); }
+const forget = (...keys) => keys.forEach(k => delete memo[k]);
+
 /* ---------------- data loaders ---------------- */
-async function loadAccess() {
+async function loadAccess() { return cached('access', 20000.0, loadAccessRaw); }
+async function loadAccessRaw() {
   const t = await table(URLS.portal, T.access);
   t.rows = t.rows.filter(r => r.Email || r['Full Name']);
   t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Manager Email'] = normEmail(r['Manager Email']); r['Personal Email'] = normEmail(r['Personal Email']); r['Portal Role'] = String(r['Portal Role'] || '').trim(); });
@@ -154,11 +169,16 @@ async function loadAccess() {
   t.rows.forEach(r => { const tl = r['Team Leader'] ? byName.get(norm(r['Team Leader'])) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader'] || ''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
   return t;
 }
-async function loadSettings() { const t = await table(URLS.portal, T.set); const o = { BreakMinutes: 60, EmergencyLimit: 6, LateGraceMinutes: 5, LeaveYear: new Date().getFullYear() }; t.rows.forEach(r => { if (r.Key) o[String(r.Key).trim()] = isNaN(+r.Value) ? r.Value : +r.Value; }); return o; }
-async function loadAttendance() { const t = await tableTail(URLS.portal, T.att, 20000); t.rows = t.rows.filter(r => r.ID).map(r => ({ ...r, Email: normEmail(r.Email), 'Shift Date': toKey(r['Shift Date']), Timestamp: tsString(r.Timestamp) })); return t; }
-async function loadRequests() { const t = await table(URLS.portal, T.req); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Submitted By'] = normEmail(r['Submitted By']); r['Submitted At'] = tsString(r['Submitted At']); r.dateList = String(r.Dates || '').split(/[,\s]+/).filter(Boolean); }); return t; }
-async function loadSwaps() { let t; try { t = await table(URLS.portal, T.swap); } catch (e) { return { headers: [], rows: [], missing: true }; } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
-async function loadTracker() {
+async function loadSettings() { return cached('settings', 300000.0, loadSettingsRaw); }
+async function loadSettingsRaw() { const t = await table(URLS.portal, T.set); const o = { BreakMinutes: 60, EmergencyLimit: 6, LateGraceMinutes: 5, LeaveYear: new Date().getFullYear() }; t.rows.forEach(r => { if (r.Key) o[String(r.Key).trim()] = isNaN(+r.Value) ? r.Value : +r.Value; }); return o; }
+async function loadAttendance() { return cached('att', 15000.0, loadAttendanceRaw); }
+async function loadAttendanceRaw() { const t = await tableTail(URLS.portal, T.att, 20000); t.rows = t.rows.filter(r => r.ID).map(r => ({ ...r, Email: normEmail(r.Email), 'Shift Date': toKey(r['Shift Date']), Timestamp: tsString(r.Timestamp) })); return t; }
+async function loadRequests() { return cached('req', 15000.0, loadRequestsRaw); }
+async function loadRequestsRaw() { const t = await table(URLS.portal, T.req); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Submitted By'] = normEmail(r['Submitted By']); r['Submitted At'] = tsString(r['Submitted At']); r.dateList = String(r.Dates || '').split(/[,\s]+/).filter(Boolean); }); return t; }
+async function loadSwaps() { return cached('swaps', 15000.0, loadSwapsRaw); }
+async function loadSwapsRaw() { let t; try { t = await table(URLS.portal, T.swap); } catch (e) { return { headers: [], rows: [], missing: true }; } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
+async function loadTracker() { return cached('tracker', 60000.0, loadTrackerRaw); }
+async function loadTrackerRaw() {
   const t = await table(URLS.tracker, TRACKER_TABLE); const H = t.headers; const col = n => H.find(h => h.toLowerCase() === n.toLowerCase());
   const cN = col('Name'), cV = col('Vacation Date'), cR = col('Role'), cT = col('Leave type'), cS = col('Status'), cB = col('Requested by'), cC = col('Additional Comment');
   t.items = t.rows.filter(r => r[cN] && String(r[cN]).trim()).map(r => {
@@ -167,13 +187,15 @@ async function loadTracker() {
   });
   return t;
 }
-async function loadBalance() {
+async function loadBalance() { return cached('balance', 300000.0, loadBalanceRaw); }
+async function loadBalanceRaw() {
   const v = await sheetValues(URLS.tracker, BALANCE_SHEET); const h = v[0].map(x => String(x ?? '').trim().toLowerCase()); const last = n => h.lastIndexOf(n);
   const cA = last('agent'), cAl = last('allowance'), cS = last('start date'), cAs = last('allowance start date'); const out = {};
   v.slice(1).forEach(r => { if (r[cA]) { const s = parseDateCell(r[cS]), as = parseDateCell(r[cAs]); out[norm(r[cA])] = { allowance: +r[cAl] || 0, start: s ? dkey(s) : null, allowanceStart: as ? dkey(as) : null }; } });
   return out;
 }
-async function loadWeeks() { return (await sheetNames(URLS.rota)).map(n => ({ name: n, start: sheetWeekStart(n) })).filter(x => x.start && /^w[kc]/i.test(x.name.trim())).sort((a, b) => a.start - b.start).map(w => ({ name: w.name, start: dkey(w.start) })); }
+async function loadWeeks() { return cached('weeks', 300000.0, loadWeeksRaw); }
+async function loadWeeksRaw() { return (await sheetNames(URLS.rota)).map(n => ({ name: n, start: sheetWeekStart(n) })).filter(x => x.start && /^w[kc]/i.test(x.name.trim())).sort((a, b) => a.start - b.start).map(w => ({ name: w.name, start: dkey(w.start) })); }
 
 /* ---------------- who is calling ---------------- */
 let jwks = null, jwksAt = 0;
@@ -260,7 +282,7 @@ async function doRequest(u, acc, b) {
   const type = String(b.type || ''); const allowed = canRaiseForOthers(u) ? ['Holiday', 'Emergency', 'UPL', 'Sick'] : ['Holiday', 'Emergency'];
   if (!allowed.includes(type)) deny(`You can't request ${type} leave.`);
   const dates = [...new Set((b.dates || []).filter(isKey))].sort(); if (!dates.length || dates.length > 62) bad('Pick between 1 and 62 days.');
-  const t = await loadRequests();
+  const t = await loadRequestsRaw();
   if (t.rows.some(r => r.Email === target && /^Pending|^Approved/.test(r.Status) && r.dateList.some(d => dates.includes(d)))) bad('There is already a request covering one of these days.');
   const row = { ID: uid('R'), 'Submitted At': new Date().toISOString(), Email: target, Name: person['Full Name'], 'Tracker Role': person['Tracker Role'], 'Leave Type': type, Dates: dates.join(', '), Days: dates.length, Reason: String(b.reason || '').slice(0, 300), 'Submitted By': u.email, Status: 'Pending Manager', 'Written To Tracker': 'No' };
   await addRow(URLS.portal, T.req, rowFor(t.headers, row));
@@ -279,7 +301,7 @@ async function writeTracker(t, r, acc) {
   await updateReq(t, r, { 'Written To Tracker': 'Yes' });
 }
 async function doDecide(u, acc, b) {
-  const t = await loadRequests(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Request not found.');
+  const t = await loadRequestsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Request not found.');
   if (r.Email === u.email) deny("You can't approve your own request.");
   const ok = !!b.ok, note = String(b.note || '').slice(0, 300), now = new Date().toISOString();
   if (r.Status === 'Pending Manager') {
@@ -301,30 +323,31 @@ async function doDecide(u, acc, b) {
   }
   bad('This request is no longer waiting for approval.');
 }
-async function doCancel(u, b) { const t = await loadRequests(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Request not found.'); if (r.Email !== u.email && r['Submitted By'] !== u.email) deny(); if (!/^Pending/.test(r.Status)) bad('Only pending requests can be cancelled.'); await updateReq(t, r, { Status: 'Cancelled' }); return { ok: true }; }
-async function doRetry(u, acc, b) { if (!['Duty Manager', 'General Manager'].includes(u.role)) deny(); const t = await loadRequests(); const r = t.rows.find(x => x.ID === b.id); if (!r || r.Status !== 'Approved' || r['Written To Tracker'] === 'Yes') bad('Nothing to retry.'); await writeTracker(t, r, acc); return { ok: true }; }
+async function doCancel(u, b) { const t = await loadRequestsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Request not found.'); if (r.Email !== u.email && r['Submitted By'] !== u.email) deny(); if (!/^Pending/.test(r.Status)) bad('Only pending requests can be cancelled.'); await updateReq(t, r, { Status: 'Cancelled' }); return { ok: true }; }
+async function doRetry(u, acc, b) { if (!['Duty Manager', 'General Manager'].includes(u.role)) deny(); const t = await loadRequestsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r || r.Status !== 'Approved' || r['Written To Tracker'] === 'Yes') bad('Nothing to retry.'); await writeTracker(t, r, acc); return { ok: true }; }
 async function doSwap(u, acc, b) {
   const mate = acc.rows.find(r => r.Email === normEmail(b.teammate)); if (!mate || isNo(mate.Active)) bad('Teammate not found.');
   if (mate.Email === u.email) bad('Pick a teammate.');
   const sameTeam = u.row['Manager Email'] ? mate['Manager Email'] === u.row['Manager Email'] : (u.row.Team && mate.Team === u.row.Team);
   if (!sameTeam || mate['Portal Role'] !== u.role) deny('You can only swap with someone in your own team.');
   if (!isKey(b.myDate) || !isKey(b.theirDate)) bad('Pick both days.');
-  const t = await loadSwaps(); if (t.missing) bad('The data file has no Swaps table.');
+  const t = await loadSwapsRaw(); if (t.missing) bad('The data file has no Swaps table.');
   if (t.rows.some(r => r.Status === 'Pending' && [r['Requester Email'], r['Teammate Email']].some(e => [u.email, mate.Email].includes(e)) && [r['Requester Date'], r['Teammate Date']].some(x => [b.myDate, b.theirDate].includes(x)))) bad('There is already a pending swap on one of these days.');
   const row = { ID: uid('S'), 'Submitted At': new Date().toISOString(), 'Requester Email': u.email, 'Requester Name': u.name, 'Requester Date': b.myDate, 'Requester Shift': String(b.myShift || '').slice(0, 80), 'Teammate Email': mate.Email, 'Teammate Name': mate['Full Name'], 'Teammate Date': b.theirDate, 'Teammate Shift': String(b.theirShift || '').slice(0, 80), Reason: String(b.reason || '').slice(0, 300), Status: 'Pending' };
   await addRow(URLS.portal, T.swap, rowFor(t.headers, row));
   return { ok: true };
 }
 async function doSwapUpdate(u, b, decide) {
-  const t = await loadSwaps(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Swap not found.'); if (r.Status !== 'Pending') bad('This swap is no longer pending.');
+  const t = await loadSwapsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Swap not found.'); if (r.Status !== 'Pending') bad('This swap is no longer pending.');
   let patch;
   if (decide) { if (u.role !== 'Duty Manager') deny('Only a Duty Manager can approve swaps.'); if ([r['Requester Email'], r['Teammate Email']].includes(u.email)) deny("You can't approve a swap you're part of."); patch = { Status: b.ok ? 'Approved' : 'Declined', 'Decided By': u.email, 'Decided At': new Date().toISOString(), Note: String(b.note || '').slice(0, 300) }; }
   else { if (r['Requester Email'] !== u.email) deny(); patch = { Status: 'Cancelled' }; }
   Object.assign(r, patch); await setRow(URLS.portal, T.swap, r._i, t.headers.map(k => r[k] ?? ''));
   return { ok: true };
 }
-async function doAccess(u, acc, b) {
+async function doAccess(u, accCached, b) {
   if (!u.admin) deny('Only portal admins can edit the access list.');
+  const acc = await loadAccessRaw();
   const H = acc.headers; const o = b.row || {};
   if (!String(o['Full Name'] || '').trim()) bad('Name is required.');
   if (o['Portal Role'] && !ROLES.includes(o['Portal Role'])) bad('Unknown role.');
@@ -355,6 +378,7 @@ async function ensureAccessColumn(acc, col) {
   if (acc.headers.includes(col)) return;
   const b = await book(URLS.portal);
   await g('POST', `${b}/tables/${T.access}/columns/add`, { name: col });
+  forget('access');
 }
 async function qualityFiles() {
   await ensureTable(URLS.portal, 'Quality Files', 'tblQualityFiles', QFILE_HEADERS, [['Oct 2026', DEFAULT_QUALITY_URL]]);
@@ -489,7 +513,7 @@ export default async function handler(req, res) {
     let out;
     switch (route) {
       case 'data': out = await readData(u, acc, req.query.parts ? String(req.query.parts).split(',') : null); break;
-      case 'rota': { const sheet = String(req.query.sheet || ''); if (!(await loadWeeks()).some(w => w.name === sheet)) bad('Unknown rota week.'); const w = sheetWeekStart(sheet); out = { name: sheet, start: dkey(w), people: parseRotaSheet(await sheetText(URLS.rota, sheet), w) }; break; }
+      case 'rota': { const sheet = String(req.query.sheet || ''); if (!(await loadWeeks()).some(w => w.name === sheet)) bad('Unknown rota week.'); const w = sheetWeekStart(sheet); out = await cached('rota:' + sheet, 300e3, async () => ({ name: sheet, start: dkey(w), people: parseRotaSheet(await sheetText(URLS.rota, sheet), w) })); break; }
       case 'att': out = await doAttendance(u, acc, b); break;
       case 'req': out = await doRequest(u, acc, b); break;
       case 'decide': out = await doDecide(u, acc, b); break;
@@ -504,6 +528,7 @@ export default async function handler(req, res) {
       case 'disputerespond': out = await doDisputeRespond(u, acc, b); break;
       default: throw new HttpError(404, 'Unknown request.');
     }
+    ({ att: ['att'], req: ['req'], decide: ['req', 'tracker'], cancel: ['req'], retry: ['req', 'tracker'], swap: ['swaps'], swapdecide: ['swaps'], swapcancel: ['swaps'], access: ['access'] }[route] || []).forEach(k => forget(k));
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json(out);
   } catch (e) {
