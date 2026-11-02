@@ -634,7 +634,7 @@ class Data {
     t.rows = t.rows.filter(r=>r.Email || r['Full Name']);
     t.rows.forEach(r=>{ r.Email = normEmail(r.Email); r['Manager Email']=normEmail(r['Manager Email']); r['Portal Role']=String(r['Portal Role']||'').trim(); });
     // team leader by name -> manager email
-    const byName = new Map(t.rows.map(r=>[norm(r['Full Name']), r])); t.rows.forEach(r=>{ if (r['Roster Name']) byName.set(norm(r['Roster Name']), byName.get(norm(r['Roster Name']))||r); });
+    const byName = new Map(t.rows.map(r=>[norm(r['Full Name']), r])); t.rows.forEach(r=>{ [r['Roster Name'], ...String(r['Previous Name']||'').split(';')].forEach(x=>{ if (norm(x)) byName.set(norm(x), byName.get(norm(x))||r); }); });
     t.rows.forEach(r=>{ const tl = r['Team Leader'] ? byName.get(norm(r['Team Leader'])) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader']||''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
     return this.cache.access = t;
   }
@@ -1191,22 +1191,23 @@ function attDetail(r){
 
 /* ============================ Leave logic ============================ */
 async function personByEmail(e){ return (await S.D.access()).rows.find(r=>r.Email===e); }
+const nameKeys = p => [...new Set([p&&p['Full Name'], ...String((p&&p['Previous Name'])||'').split(';')].map(norm).filter(Boolean))];
 async function leaveStats(person){
-  const tr = (await S.D.tracker()).items; const bal = await S.D.balance(); const n = norm(person['Full Name']);
-  const mine = tr.filter(x=>x.n===n);
+  const tr = (await S.D.tracker()).items; const bal = await S.D.balance(); const keys = nameKeys(person);
+  const mine = tr.filter(x=>keys.includes(x.n));
   const consumed = mine.filter(x=>x.approved && (x.type==='Holiday'||x.type==='Emergency')).length;
   const emerg = mine.filter(x=>x.approved && x.type==='Emergency').length;
   const reqs = (await S.D.requests()).rows.filter(r=>r.Email===person.Email && /^Pending/.test(r.Status));
   const pendingDays = reqs.reduce((a,r)=>a+r.dateList.length,0);
   const ptoPending = reqs.filter(r=>['Holiday','Emergency'].includes(r['Leave Type'])).reduce((a,r)=>a+r.dateList.length,0);
-  const b = bal[n]; const allowance = b ? b.allowance : null;
+  const b = keys.map(k=>bal[k]).find(Boolean); const allowance = b ? b.allowance : null;
   return { mine, consumed, emerg, pendingDays, ptoPending, allowance, remaining: allowance==null?null:allowance-consumed, b };
 }
 async function emergencyAlerts(){
   const tr = (await S.D.tracker()).items; const lim = S.settings.EmergencyLimit; const acc = (await S.D.access()).rows;
   const by = {}; tr.filter(x=>x.approved && x.type==='Emergency').forEach(x=>{ (by[x.n]=by[x.n]||{name:x.name,role:x.role,count:0,dates:[]}); by[x.n].count++; by[x.n].dates.push(x.date); });
   let list = Object.values(by).filter(x=>x.count>lim).sort((a,b)=>b.count-a.count);
-  if (S.me.role==='Team Leader'){ const mine = new Set(acc.filter(r=>r['Manager Email']===S.me.email).map(r=>norm(r['Full Name']))); list = list.filter(x=>mine.has(norm(x.name))); }
+  if (S.me.role==='Team Leader'){ const mine = new Set(acc.filter(r=>r['Manager Email']===S.me.email).flatMap(nameKeys)); list = list.filter(x=>mine.has(norm(x.name))); }
   return list;
 }
 async function slotMap(){

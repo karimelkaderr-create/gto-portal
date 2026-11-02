@@ -178,7 +178,7 @@ async function loadAccessRaw() {
   const t = await table(URLS.portal, T.access);
   t.rows = t.rows.filter(r => r.Email || r['Full Name']);
   t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Manager Email'] = normEmail(r['Manager Email']); r['Personal Email'] = normEmail(r['Personal Email']); r['Portal Role'] = String(r['Portal Role'] || '').trim(); });
-  const byName = new Map(t.rows.map(r => [norm(r['Full Name']), r])); t.rows.forEach(r => { if (r['Roster Name'] && !byName.has(norm(r['Roster Name']))) byName.set(norm(r['Roster Name']), r); });
+  const byName = new Map(t.rows.map(r => [norm(r['Full Name']), r])); t.rows.forEach(r => { [r['Roster Name'], ...String(r['Previous Name'] || '').split(';')].forEach(x => { if (norm(x) && !byName.has(norm(x))) byName.set(norm(x), r); }); });
   t.rows.forEach(r => { const tl = r['Team Leader'] ? byName.get(norm(r['Team Leader'])) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader'] || ''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
   return t;
 }
@@ -236,10 +236,12 @@ async function caller(req, acc) {
   return { email: me.Email || email, name: me['Full Name'], role: me['Portal Role'], admin: yes(me['Portal Admin']), row: me };
 }
 const isMgr = u => MANAGER_ROLES.includes(u.role);
+// every name a person goes by in the Leaves Tracker: their current name, plus earlier names kept in 'Previous Name' after a rename
+const nameKeys = p => [...new Set([p && p['Full Name'], ...String((p && p['Previous Name']) || '').split(';')].map(norm).filter(Boolean))];
 const teamEmails = (u, acc) => new Set(acc.rows.filter(r => r['Manager Email'] === u.email).map(r => r.Email).filter(Boolean));
 const seesAll = u => ['Duty Manager', 'General Manager', 'HR'].includes(u.role);
 const canRaiseForOthers = u => ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role);
-const publicPerson = r => ({ _i: r._i, Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], 'Team Leader': r['Team Leader'], 'Manager Email': r['Manager Email'], Team: r.Team, 'Tracker Role': r['Tracker Role'], 'Rota Name': r['Rota Name'], Active: r.Active, 'Roster Name': r['Roster Name'], 'Quality Team': r['Quality Team'], _tl: r._tl });
+const publicPerson = r => ({ _i: r._i, Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], 'Team Leader': r['Team Leader'], 'Manager Email': r['Manager Email'], Team: r.Team, 'Tracker Role': r['Tracker Role'], 'Rota Name': r['Rota Name'], Active: r.Active, 'Roster Name': r['Roster Name'], 'Previous Name': r['Previous Name'], 'Quality Team': r['Quality Team'], _tl: r._tl });
 
 /* ---------------- read: everything the page needs, filtered by role ---------------- */
 async function readData(u, acc, parts) {
@@ -258,11 +260,11 @@ async function readData(u, acc, parts) {
   if (want('requests')) jobs.push(safe('Leave requests', loadRequests().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || r['Submitted By'] === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.requests = t; })));
   if (want('swaps')) jobs.push(safe('Swaps', loadSwaps().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => [r['Requester Email'], r['Teammate Email']].includes(u.email) || (u.role === 'Team Leader' && (team.has(r['Requester Email']) || team.has(r['Teammate Email'])))); out.swaps = t; })));
   if (want('tracker')) jobs.push(safe('Leaves Tracker', loadTracker().then(t => {
-    const mine = norm(u.name);
-    const items = isMgr(u) ? t.items : t.items.map(x => x.n === mine ? x : { _i: -1, name: '', n: '', date: x.date, role: x.role, type: '', status: x.approved ? 'Approved' : x.status ? 'Other' : '', by: '', comment: '', approved: x.approved, pending: x.pending, cancelled: x.cancelled });
+    const mine = new Set([norm(u.name), ...nameKeys(u.row)]);
+    const items = isMgr(u) ? t.items : t.items.map(x => mine.has(x.n) ? x : { _i: -1, name: '', n: '', date: x.date, role: x.role, type: '', status: x.approved ? 'Approved' : x.status ? 'Other' : '', by: '', comment: '', approved: x.approved, pending: x.pending, cancelled: x.cancelled });
     out.tracker = { headers: [], items };
   })));
-  if (want('balance')) jobs.push(safe('Leaves Tracker (Balance tab)', loadBalance().then(b => { out.balance = isMgr(u) ? b : { [norm(u.name)]: b[norm(u.name)] }; })));
+  if (want('balance')) jobs.push(safe('Leaves Tracker (Balance tab)', loadBalance().then(b => { out.balance = isMgr(u) ? b : Object.fromEntries([norm(u.name), ...nameKeys(u.row)].filter(k => b[k]).map(k => [k, b[k]])); })));
   if (want('weeks')) jobs.push(safe('Rota', loadWeeks().then(w => { out.weeks = w; })));
   await Promise.all(jobs);
   return out;
@@ -290,8 +292,8 @@ async function doAttendance(u, acc, b) {
   return { row };
 }
 async function ptoLeft(person, reqs, excludeId) {
-  const n = norm(person['Full Name']); const [bal, tr] = await Promise.all([loadBalance(), loadTracker()]); const b = bal[n]; if (!b) return null;
-  const used = tr.items.filter(x => x.n === n && x.approved && (x.type === 'Holiday' || x.type === 'Emergency')).length;
+  const keys = nameKeys(person); const [bal, tr] = await Promise.all([loadBalance(), loadTracker()]); const b = keys.map(k => bal[k]).find(Boolean); if (!b) return null;
+  const used = tr.items.filter(x => keys.includes(x.n) && x.approved && (x.type === 'Holiday' || x.type === 'Emergency')).length;
   const pending = reqs.filter(r => r.Email === person.Email && r.ID !== excludeId && /^Pending/.test(r.Status) && ['Holiday', 'Emergency'].includes(r['Leave Type'])).reduce((a, r) => a + r.dateList.length, 0);
   return { allowance: b.allowance, used, pending, left: b.allowance - used - pending };
 }
@@ -368,16 +370,29 @@ async function doSwapUpdate(u, b, decide) {
 }
 async function doAccess(u, accCached, b) {
   if (!u.admin) deny('Only portal admins can edit the access list.');
-  const acc = await loadAccessRaw();
-  const H = acc.headers; const o = b.row || {};
+  let acc = await loadAccessRaw();
+  const o = b.row || {};
   if (!String(o['Full Name'] || '').trim()) bad('Name is required.');
   if (o['Portal Role'] && !ROLES.includes(o['Portal Role'])) bad('Unknown role.');
-  const tl = acc.rows.find(x => norm(x['Full Name']) === norm(o['Team Leader'])); const clean = { ...o, Email: normEmail(o.Email), 'Manager Email': tl ? tl.Email : normEmail(o['Manager Email']) };
+  const old = Number.isInteger(o._i) && o._i >= 0 ? acc.rows.find(x => x._i === o._i) : null;
+  const renamed = old && norm(old['Full Name']) !== norm(o['Full Name']);
+  if (renamed && !acc.headers.includes('Previous Name')) { await ensureAccessColumn(acc, 'Previous Name'); acc = await loadAccessRaw(); }
+  const H = acc.headers;
+  const tl = acc.rows.find(x => nameKeys(x).includes(norm(o['Team Leader']))); const clean = { ...o, Email: normEmail(o.Email), 'Manager Email': tl ? tl.Email : normEmail(o['Manager Email']) };
+  if (tl && norm(o['Team Leader']) !== norm(tl['Full Name'])) clean['Team Leader'] = tl['Full Name'];
+  // Renaming someone: keep the old name in 'Previous Name' so their Leaves Tracker history, balance and team links still match
+  if (renamed) { const prev = String(old['Previous Name'] || '').split(';').map(x => x.trim()).filter(Boolean); if (!prev.some(x => norm(x) === norm(old['Full Name']))) prev.push(String(old['Full Name']).trim()); clean['Previous Name'] = prev.filter(x => norm(x) !== norm(clean['Full Name'])).join('; '); }
   if (clean.Email && acc.rows.some(x => x.Email === clean.Email && x._i !== o._i)) bad('That email is already on the list.');
   const vals = H.map(k => clean[k] ?? '');
-  if (Number.isInteger(o._i) && o._i >= 0) { if (o._i === u.row._i && (!yes(clean['Portal Admin']) || isNo(clean.Active))) bad("You can't remove your own admin access."); await setRow(URLS.portal, T.access, o._i, vals); }
+  if (old) { if (o._i === u.row._i && (!yes(clean['Portal Admin']) || isNo(clean.Active))) bad("You can't remove your own admin access."); await setRow(URLS.portal, T.access, o._i, vals); }
   else await addRow(URLS.portal, T.access, vals);
-  return { ok: true };
+  let moved = 0;
+  if (renamed) for (const r of acc.rows) {   // people whose team leader was written with the old name
+    if (r._i === o._i || norm(r['Team Leader']) !== norm(old['Full Name'])) continue;
+    r['Team Leader'] = clean['Full Name']; if (!r['Manager Email'] && clean.Email) r['Manager Email'] = clean.Email;
+    await setRow(URLS.portal, T.access, r._i, H.map(k => r[k] ?? '')); moved++;
+  }
+  qCache = null; return { ok: true, renamed: !!renamed, teamUpdated: moved };
 }
 
 /* ---------------- quality: evaluations + disputes ---------------- */
@@ -414,9 +429,10 @@ function matchPerson(name, acc) {
   const exact = acc.rows.find(r => norm(r['Roster Name']) === n || norm(r['Full Name']) === n || (r['Quality Name'] && norm(r['Quality Name']) === n)); if (exact) return exact;
   const toks = n.split(' '); let best = null, bs = 0, tie = false;
   for (const r of acc.rows) {
+    if (MANAGER_ROLES.includes(r['Portal Role'])) continue; // only an exact name links an evaluation to a team leader or manager
     const full = norm(r['Full Name']).split(' '); if (full[0] !== toks[0] && !(toks[0].length >= 5 && lev1(toks[0], full[0]))) continue;
     if (!toks.slice(1).every(t => full.slice(1).some(f => f === t || (t.length > 3 && f.length > 3 && (f.startsWith(t) || t.startsWith(f) || lev1(t, f)))))) continue;
-    const sc = toks.length + (full[0] === toks[0] ? 0.5 : 0); if (sc > bs) { bs = sc; best = r; tie = false; } else if (sc === bs) tie = true;
+    const sc = toks.length + (full[0] === toks[0] ? 0.5 : 0) - 0.1 * Math.max(0, full.length - toks.length) + (r['Portal Role'] === 'Agent' ? 0.05 : 0); if (sc > bs) { bs = sc; best = r; tie = false; } else if (sc === bs) tie = true;
   }
   return tie ? null : best;
 }
