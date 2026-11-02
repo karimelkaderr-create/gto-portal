@@ -464,7 +464,7 @@ async function loadEvaluations(acc) {
         const p = matchPerson(agent, acc); const d = parseDateCell(r[cDate]);
         const errors = [];
         errCats.forEach(([code, head], j) => { const ci = H.findIndex(h => h.toLowerCase() === head.toLowerCase()); if (ci >= 0 && /^yes$/i.test(String(r[ci]).trim())) { const type = code === 'ZTP' ? r[incCol] : r[typeCols[j]]; errors.push({ code, type: String(type || '').trim() }); } });
-        items.push({ id: `${fi}|${sheet}|${hr + 2 + k}`, month: f.month, sheet, week: r[cWeek] ?? '', agent, agentEmail: p ? p.Email : '', agentFull: p ? p['Full Name'] : agent, tl: String(r[cTL] || '').trim(), tlEmail: p ? p['Manager Email'] : '',
+        items.push({ id: `${fi}|${sheet}|${hr + 2 + k}`, month: f.month, sheet, week: r[cWeek] ?? '', agent, agentEmail: p ? p.Email : '', agentFull: p ? p['Full Name'] : agent, tl: (p && p._tl && p['Manager Email']) ? String(p._tl).trim().split(/\s+/)[0] : String(r[cTL] || '').trim(), tlEmail: p ? p['Manager Email'] : '',
           date: d ? dkey(d) : '', link: /^https?:/i.test(String(r[cLink] || '')) ? String(r[cLink]) : '', client: String(r[cClient] || '').trim(), score,
           metrics: Object.fromEntries(metrics.map(([m, i]) => [m, pct(r[i])])), resolved: String(r[idx('issue resolution')] ?? ''), irresolution: String(r[idx('irresolution')] ?? ''),
           errors, inquiry: String(r[idx('inquiry type')] ?? ''), findings: String(r[idx('findings')] ?? ''), actions: String(r[idx('actions')] ?? '') });
