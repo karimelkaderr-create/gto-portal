@@ -935,6 +935,7 @@ async function boot(){
 /* ============================ Rendering shell ============================ */
 const ICON = {
   home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+  act:'<svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14 2.5-7H21"/></svg>',
   att:'<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>',
   leave:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg>',
   sched:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 9v12M15 9v12"/></svg>',
@@ -943,18 +944,18 @@ const ICON = {
   admin:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.9 2.6 2.6 3 5.2"/></svg>',
   out:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h11"/></svg>'
 };
-const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
+const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], act:['Agent activity','Day-by-day activity, live status, shift-start attendance check and hours reports.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
 function applyNavPin(){ const on=navPinned(); document.body.classList.toggle('nav-pinned', on); const b=$('#navpin'); if (b){ b.setAttribute('aria-pressed', on); b.title = on?'Let the menu hide':'Keep the menu open'; b.setAttribute('aria-label', b.title); } }
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
   const myRender = S.renderId = (S.renderId||0) + 1;
-  const agent = !isMgr(u); if (agent && S.tab==='att') S.tab='home';
+  const agent = !isMgr(u); if (agent && (S.tab==='att'||S.tab==='act')) S.tab='home';
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
   const swapsWaiting = (await swapQueue()).length;
-  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']];
+  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['act','Agent activity'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']];
   if (u.admin) tabs.push(['admin','Access']);
   const hour=new Date().getHours(); const greet = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const [title, sub] = S.tab==='home' ? [`${greet}, ${esc(String(u.name).split(/\s+/)[0])}`, isMgr(u)?'Here is what needs your attention today.':'Here is your day.'] : PAGES[S.tab];
@@ -983,7 +984,7 @@ async function render(){
   startUpdatePoll();
   if (agent) await mountStatusBar();
   try {
-    await ({home:viewHome, att:viewAttendance, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
+    await ({home:viewHome, att:viewAttendance, act:viewActivity, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
   } catch(e){ console.error(e); if (S.renderId !== myRender) return; /* a newer page load replaced this one */ $('#view').innerHTML = `<div class="alert bad">This page didn't load: ${esc(e.message)}. Refresh to try again.</div>`; }
 }
 
@@ -1105,12 +1106,6 @@ async function viewAttendance(){
   await S.D.attendance(true);
   let html = `<div id="board"></div>
     <div class="card sec"><h2>Today's activity</h2><div id="mylog"></div></div>`;
-  if (isMgr(u)) html += `<div class="card sec"><div class="row" style="margin-bottom:4px"><h2 style="margin:0">Team log-in breakdown</h2><span class="spacer"></span>
-     <div class="toolbar"><input type="date" id="af" class="i" aria-label="From"><span class="muted">to</span><input type="date" id="at" class="i" aria-label="To">
-     <select id="ateam" class="i" aria-label="Team"></select>
-     <input id="aq" class="i" placeholder="Search name" style="width:170px">
-     <button class="btn" id="acsv">Download CSV</button></div></div>
-     <div id="asum"></div><div id="abreak" class="tablewrap"><div class="loading">Loading…</div></div></div>`;
   v.innerHTML = html;
   const paintLog = () => {
     const s2 = shiftState(S.D.cache.att.rows, u.email);
@@ -1119,7 +1114,140 @@ async function viewAttendance(){
     $('#mylog').innerHTML = sm.ev.length ? `<div class="tablewrap"><table><thead><tr><th>Time</th><th>Action</th></tr></thead><tbody>${sm.ev.map(e=>`<tr><td class="num">${hm(e.ts)}</td><td>${esc(e.Action)}${e.Note?` <span class="muted">(${esc(e.Note)})</span>`:''}</td></tr>`).join('')}</tbody></table></div>` : `<p class="muted" style="margin:0">Nothing recorded yet for ${fmtDate(date)}. Clock in on the board above when your shift starts.</p>`;
   };
   await mountBoard($('#board'), paintLog); paintLog();
-  if (isMgr(u)) await breakdown();
+}
+
+const DAYHTML = `<div><div class="row" style="margin-bottom:4px"><h2 style="margin:0">Team log-in breakdown</h2><span class="spacer"></span>
+     <div class="toolbar"><input type="date" id="af" class="i" aria-label="From"><span class="muted">to</span><input type="date" id="at" class="i" aria-label="To">
+     <select id="ateam" class="i" aria-label="Team"></select>
+     <input id="aq" class="i" placeholder="Search name" style="width:170px">
+     <button class="btn" id="acsv">Download CSV</button></div></div>
+     <div id="asum"></div><div id="abreak" class="tablewrap"><div class="loading">Loading…</div></div></div>`;
+
+/* ============================ Agent activity (Team Leader and above) ============================ */
+async function activityPeople(R){
+  const u=S.me; const acc=await teamMembers();
+  let people=acc.filter(r=>r['Portal Role']==='Agent' && r.Email);
+  if (R.team==='mine') people=people.filter(r=>r['Manager Email']===u.email);
+  else if (R.team && R.team!=='all') people=people.filter(r=>r.Team===R.team);
+  if (R.q) people=people.filter(r=>norm(r['Full Name']).includes(norm(R.q)));
+  return { acc, people };
+}
+function actFilters(R, acc, onchange, withDate){
+  const u=S.me; const teams=[...new Set(acc.map(r=>r.Team).filter(Boolean))].sort();
+  return `<div class="toolbar">${withDate?`<input type="date" id="xd" class="i" aria-label="Date" value="${R.date}">`:''}<select id="xteam" class="i" aria-label="Team" style="width:auto"><option value="all">All teams</option>${u.role==='Team Leader'?'<option value="mine">My team</option>':''}${teams.map(t=>`<option ${R.team===t?'selected':''}>${esc(t)}</option>`).join('')}</select><input id="xq" class="i" placeholder="Search name" style="width:170px" value="${esc(R.q||'')}"></div>`;
+}
+function actWire(R, onchange){
+  const t=$('#xteam'); if (t) t.value=R.team;
+  t && (t.onchange=()=>{ R.team=t.value; onchange(); });
+  $('#xq') && ($('#xq').oninput=()=>{ clearTimeout(window._xq); window._xq=setTimeout(()=>{ R.q=$('#xq').value; onchange(); },300); });
+  $('#xd') && ($('#xd').onchange=()=>{ R.date=$('#xd').value||R.date; onchange(); });
+}
+async function viewActivity(){
+  const v=$('#view'); const u=S.me;
+  S.act = S.act || { sub:'days', team: u.role==='Team Leader'?'mine':'all', q:'', date:dkey(new Date()), shift:'auto', period:'week', rdate:dkey(new Date()) };
+  const subs=[['days','Agent days activity'],['status','Current status'],['check','Attendance check'],['report','Hours report']];
+  v.innerHTML=`<div class="kb-row" role="tablist" aria-label="Agent activity" style="margin:0 0 14px">${subs.map(([k,l])=>`<button class="pill ${S.act.sub===k?'on':''}" data-sub="${k}" role="tab" aria-selected="${S.act.sub===k}">${l}</button>`).join('')}</div><div id="actbody"></div>`;
+  document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ S.act.sub=b.dataset.sub; viewActivity(); });
+  clearInterval(tickTimer);
+  await S.D.attendance(true);
+  const body=$('#actbody');
+  if (S.act.sub==='days'){
+    body.innerHTML=`<div class="card sec">${DAYHTML}</div>`;
+    await breakdown();
+  } else if (S.act.sub==='status') await actStatus(body);
+  else if (S.act.sub==='check') await actCheck(body);
+  else await actReport(body);
+}
+async function liveRefresh(fn){
+  clearInterval(tickTimer);
+  tickTimer=setInterval(async()=>{ if (document.querySelector('.modal')) return; try{ await S.D.attendance(true); await fn(); }catch(e){} },30000);
+}
+async function actStatus(body){
+  const R=S.act; const today=new Date(); today.setHours(0,0,0,0); const k=dkey(today);
+  const { acc } = await activityPeople(R);
+  body.innerHTML=`<div class="card sec"><div class="row" style="margin-bottom:4px"><h2 style="margin:0">Current status</h2><span class="spacer"></span>${actFilters(R,acc)}<button class="btn" id="xref">Refresh</button></div><div id="xsum"></div><div class="tablewrap" id="xtab"><div class="loading">Loading…</div></div><p class="muted" style="margin:10px 0 0;font-size:12px">Updates itself every 30 seconds.</p></div>`;
+  const paint=async()=>{
+    const { people } = await activityPeople(R); const ev=S.D.cache.att.rows; const grace=S.settings.LateGraceMinutes;
+    const rows=[];
+    for (const p of people){
+      const sh=await S.D.shiftFor(p,today); const ps=parseShift(sh.text); const st=shiftState(ev,p.Email); const sm=summarise(ev,p.Email,st.open?st.open.date:k);
+      let status, cls, since='';
+      if (st.open && st.onBreak){ status='On break'; cls='warn'; since=hm(new Date(st.onBreak)); }
+      else if (st.open && st.onCoach){ status='In coaching'; cls='info'; since=hm(new Date(st.onCoach)); }
+      else if (st.open){ status='Working'; cls='ok'; since='in '+hm(new Date(st.open.in)); }
+      else if (sm.in && sm.out){ status='Clocked out'; cls='muted'; since=hm(sm.out); }
+      else if (ps){ const start=today.getTime()+ps.start*6e4; if (Date.now()>start+grace*6e4){ status='Not logged in'; cls='bad'; } else { status='Shift not started'; cls='muted'; } }
+      else { status='No shift today'; cls='muted'; }
+      rows.push({ name:p['Full Name'], tl:p._tl||'', shift:sh.text, status, cls, since, mins: st.open&&st.onBreak?st.breakMins: st.open&&st.onCoach?st.coachMins:0, rank:{bad:0,warn:1,info:2,ok:3,muted:4}[cls] });
+    }
+    rows.sort((a,b)=>a.rank-b.rank||a.name.localeCompare(b.name));
+    const c=n=>rows.filter(r=>r.status===n).length;
+    $('#xsum').innerHTML=`<div class="counts">${[['Working',c('Working'),'ok'],['On break',c('On break'),'warn'],['In coaching',c('In coaching'),''],['Not logged in',c('Not logged in'),'bad'],['Clocked out',c('Clocked out'),''],['Not started / off',c('Shift not started')+c('No shift today'),'']].map(([l,n,cl])=>`<div class="${n?cl:''}"><b>${n}</b>${l}</div>`).join('')}</div>`;
+    $('#xtab').innerHTML=rows.length?`<table><thead><tr><th>Agent</th><th>Team leader</th><th>Today's shift</th><th>Status</th><th>Since</th><th>Time in status</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="muted">${esc(r.tl)}</td><td>${esc(r.shift||'—')}</td><td><span class="chip ${r.cls==='muted'?'':r.cls}">${r.status}</span></td><td class="num">${esc(r.since)}</td><td class="num">${r.mins?fmtMins(r.mins):''}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:14px">No agents match.</p>';
+  };
+  const re=()=>paint(); actWire(R,re); $('#xref').onclick=async()=>{ await S.D.attendance(true); paint(); }; await paint(); liveRefresh(paint);
+}
+async function actCheck(body){
+  const R=S.act; const { acc } = await activityPeople(R);
+  body.innerHTML=`<div class="card sec"><div class="row" style="margin-bottom:4px"><h2 style="margin:0">Attendance check</h2><span class="spacer"></span>${actFilters(R,acc,null,true)}<select id="xshift" class="i" aria-label="Shift start" style="width:auto"></select><button class="btn" id="xref">Refresh</button></div><p class="muted" style="margin:0 0 4px">Use at the start of each shift: everyone scheduled, and who has not logged in yet.</p><div id="xsum"></div><div id="xmiss"></div><div class="tablewrap" id="xtab"><div class="loading">Loading…</div></div></div>`;
+  const paint=async()=>{
+    const { people } = await activityPeople(R); const ev=S.D.cache.att.rows; const grace=S.settings.LateGraceMinutes; const d=fromKey(R.date), k=R.date; const isToday=k===dkey(new Date());
+    const all=[];
+    for (const p of people){
+      const sh=await S.D.shiftFor(p,d); const ps=parseShift(sh.text); if (!ps) continue;
+      const sm=summarise(ev,p.Email,k); const start=d.getTime()+ps.start*6e4;
+      all.push({ p, name:p['Full Name'], tl:p._tl||'', shift:sh.text, startMin:ps.start, startLbl:ps.label.split('–')[0], start, in:sm.in, out:sm.out });
+    }
+    const starts=[...new Set(all.map(r=>r.startMin))].sort((a,b)=>a-b);
+    let sel=R.shift; if (sel==='auto'){ const nowM=(Date.now()-d.getTime())/6e4; const near=starts.filter(m=>Math.abs(m-nowM)<=150).sort((a,b)=>Math.abs(a-nowM)-Math.abs(b-nowM))[0]; sel = isToday && near!=null ? String(near) : 'all'; }
+    $('#xshift').innerHTML=`<option value="all">All shift starts</option>${starts.map(m=>`<option value="${m}">${pad(Math.floor(m/60)%24)}:${pad(m%60)} shift</option>`).join('')}`; $('#xshift').value=starts.map(String).includes(sel)?sel:'all';
+    $('#xshift').onchange=()=>{ R.shift=$('#xshift').value; paint(); };
+    const rows=all.filter(r=>$('#xshift').value==='all'||String(r.startMin)===$('#xshift').value);
+    for (const r of rows){
+      if (r.in){ const late=(r.in-r.start)/6e4; r.state=late>grace?'Late':'Logged in'; r.cls=late>grace?'warn':'ok'; r.detail=hm(new Date(r.in))+(late>grace?' ('+fmtMins(late)+' late)':''); r.rank=late>grace?1:2; }
+      else if (!isToday && k<dkey(new Date())){ r.state='Absent'; r.cls='bad'; r.detail='Never logged in'; r.rank=0; }
+      else if (Date.now()>r.start) { r.state='Missing'; r.cls='bad'; r.detail='Not logged in '+(Date.now()-r.start>0?fmtMins((Date.now()-r.start)/6e4)+' after start':''); r.rank=0; }
+      else { r.state='Not due yet'; r.cls=''; r.detail='Starts '+r.startLbl; r.rank=3; }
+    }
+    rows.sort((a,b)=>a.rank-b.rank||a.startMin-b.startMin||a.name.localeCompare(b.name));
+    const n=f=>rows.filter(f).length; const miss=rows.filter(r=>r.state==='Missing'||r.state==='Absent');
+    $('#xsum').innerHTML=`<div class="counts">${[['Scheduled',rows.length,''],['Logged in',n(r=>r.in),'ok'],['Missing',miss.length,'bad'],['Late',n(r=>r.state==='Late'),'warn'],['Not due yet',n(r=>r.state==='Not due yet'),'']].map(([l,c,cl])=>`<div class="${c?cl:''}"><b>${c}</b>${l}</div>`).join('')}</div>`;
+    $('#xmiss').innerHTML=rows.length? (miss.length?`<div class="alert bad" style="margin:0 0 12px"><b>${miss.length} not logged in:</b> ${miss.map(r=>esc(r.name)+(r.tl?` <span class="muted">(${esc(String(r.tl).split(/\s+/)[0])})</span>`:'')).join(', ')}</div>`:`<div class="alert ok" style="margin:0 0 12px"><b>Everyone due so far has logged in.</b></div>`):'';
+    $('#xtab').innerHTML=rows.length?`<table><thead><tr><th>Agent</th><th>Team leader</th><th>Shift</th><th>Status</th><th>Detail</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="muted">${esc(r.tl)}</td><td>${esc(r.shift)}</td><td><span class="chip ${r.cls}">${r.state}</span></td><td class="num">${esc(r.detail)}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:14px">Nobody is scheduled for this selection.</p>';
+  };
+  actWire(R,paint); $('#xref').onclick=async()=>{ await S.D.attendance(true); paint(); }; await paint(); liveRefresh(paint);
+}
+async function actReport(body){
+  const R=S.act; const { acc } = await activityPeople(R);
+  body.innerHTML=`<div class="card sec"><div class="row" style="margin-bottom:4px"><h2 style="margin:0">Hours report</h2><span class="spacer"></span><div class="toolbar"><select id="xper" class="i" aria-label="Period" style="width:auto"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select><input type="date" id="xrd" class="i" aria-label="Date" value="${R.rdate}"></div>${actFilters(R,acc)}<button class="btn" id="xcsv">Download CSV</button></div><p class="muted" style="margin:0 0 4px">Logged-in hours = clock in to clock out, minus breaks (coaching counts as worked time).</p><div id="xsum"></div><div class="tablewrap" id="xtab"><div class="loading">Loading…</div></div></div>`;
+  $('#xper').value=R.period;
+  let out=null;
+  const paint=async()=>{
+    const { people } = await activityPeople(R); const ev=S.D.cache.att.rows;
+    const a=fromKey(R.rdate); let d0,d1;
+    if (R.period==='day'){ d0=a; d1=a; } else if (R.period==='week'){ const off=(a.getDay()+6)%7; d0=addDays(a,-off); d1=addDays(d0,6); } else { d0=new Date(a.getFullYear(),a.getMonth(),1); d1=new Date(a.getFullYear(),a.getMonth()+1,0); }
+    const days=[]; for (let d=new Date(d0); d<=d1; d=addDays(d,1)) days.push(new Date(d));
+    const by=new Map(); for (const e of ev){ const key=e.Email+'|'+e['Shift Date']; (by.get(key)||by.set(key,[]).get(key)).push(e); }
+    const todayK=dkey(new Date());
+    const rows=people.map(p=>{
+      let tot=0, worked=0, brk=0, noOut=0; const cells=days.map(d=>{ const k=dkey(d); const sub=by.get(p.Email+'|'+k); if (!sub) return null; const sm=summarise(sub,p.Email,k); if (!sm.in) return null;
+        if (!sm.out && k<todayK){ noOut++; return { m:null, noOut:true }; }
+        const m=Math.max(0,((sm.out||new Date())-sm.in)/6e4-sm.breakMins); tot+=m; worked++; brk+=sm.breakMins; return { m }; });
+      return { name:p['Full Name'], tl:p._tl||'', cells, tot, worked, brk, noOut };
+    }).sort((x,y)=>x.name.localeCompare(y.name));
+    out={ days, rows, d0, d1 };
+    const grand=rows.reduce((s,r)=>s+r.tot,0);
+    $('#xsum').innerHTML=`<div class="counts">${[['Agents',rows.length],['Total logged-in hours',(grand/60).toFixed(1)],['Average per agent',rows.length?(grand/60/rows.length).toFixed(1)+'h':'0']].map(([l,n])=>`<div><b>${n}</b>${l}</div>`).join('')}</div><p class="muted" style="margin:0 0 8px">${fmtDate(d0)} – ${fmtDate(d1)}</p>`;
+    const cellH=c=>!c?'<span class="muted">–</span>':c.noOut?'<span class="chip warn" title="No clock-out recorded">no out</span>':fmtMins(c.m);
+    $('#xtab').innerHTML=rows.length?`<table><thead><tr><th>Agent</th><th>Team leader</th>${days.map(d=>`<th class="num">${R.period==='day'?'Hours':d.toLocaleDateString('en-GB',{weekday:'short'})+' '+d.getDate()}</th>`).join('')}<th class="num">Total</th><th class="num">Days</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="muted">${esc(r.tl)}</td>${r.cells.map(c=>`<td class="num">${cellH(c)}</td>`).join('')}<td class="num"><b>${r.tot?fmtMins(r.tot):'–'}</b></td><td class="num">${r.worked}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:14px">No agents match.</p>';
+  };
+  const wire=()=>{ R.period=$('#xper').value; R.rdate=$('#xrd').value||R.rdate; paint(); };
+  $('#xper').onchange=wire; $('#xrd').onchange=wire; actWire(R,paint);
+  $('#xcsv').onclick=()=>{ if(!out) return; const hrs=m=>m==null?'':(m/60).toFixed(2);
+    const lines=[['Agent','Team leader',...out.days.map(d=>dkey(d)),'Total hours','Days worked']].concat(out.rows.map(r=>[r.name,r.tl,...r.cells.map(c=>c?(c.noOut?'no clock-out':hrs(c.m)):''),hrs(r.tot),r.worked]));
+    const csv='﻿'+lines.map(l=>l.map(x=>`"${String(x??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`hours-${R.period}-${dkey(out.d0)}_${dkey(out.d1)}.csv`; a.click(); };
+  await paint();
 }
 
 async function teamMembers(){
