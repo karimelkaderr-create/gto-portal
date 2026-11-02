@@ -197,7 +197,8 @@ async function loadAttendanceRaw() { const t = await tableTail(URLS.portal, T.at
 async function loadRequests() { return cached('req', 15000.0, loadRequestsRaw); }
 async function loadRequestsRaw() { const t = await table(URLS.portal, T.req); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Submitted By'] = normEmail(r['Submitted By']); r['Submitted At'] = tsString(r['Submitted At']); r.dateList = String(r.Dates || '').split(/[,\s]+/).filter(Boolean); }); return t; }
 async function loadSwaps() { return cached('swaps', 15000.0, loadSwapsRaw); }
-async function loadSwapsRaw() { let t; try { t = await table(URLS.portal, T.swap); } catch (e) { return { headers: [], rows: [], missing: true }; } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
+async function loadSwapsRaw() { let t; try { t = await table(URLS.portal, T.swap); } catch (e) { return { headers: [], rows: [], missing: true }; }
+  if (!t.headers.includes('Type')) { try { const b = await book(URLS.portal); await g('POST', `${b}/tables/${T.swap}/columns/add`, { name: 'Type' }); t = await table(URLS.portal, T.swap); } catch (e) { console.error('swap type column', e.message); } } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
 async function loadTracker() { return cached('tracker', 60000.0, loadTrackerRaw); }
 async function loadTrackerRaw() {
   const t = await table(URLS.tracker, TRACKER_TABLE); const H = t.headers; const col = n => H.find(h => h.toLowerCase() === n.toLowerCase());
@@ -361,10 +362,15 @@ async function doRetry(u, acc, b) { if (!['Duty Manager', 'General Manager'].inc
 async function doSwap(u, acc, b) {
   const mate = acc.rows.find(r => r.Email === normEmail(b.teammate)); if (!mate || isNo(mate.Active)) bad('Colleague not found.');
   if (mate.Email === u.email) bad('Pick a colleague to swap with.');
+  const dept = x => norm(x.Team);
+  if (!dept(u.row) || dept(u.row) !== dept(mate) || String(mate['Portal Role']).trim() !== u.role) deny(!dept(u.row) ? "Your department isn't set yet. Ask your Duty Manager to add it in Access." : 'You can only swap with someone in the same role and department (' + u.role + ', ' + u.row.Team + ').');
+  const type = b.type === 'dayoff' ? 'Day-off swap' : 'Shift swap';
+  if (type === 'Shift swap' && b.myDate !== b.theirDate) bad('A shift swap is for one day. Choose the same date, or use a day-off swap.');
+  if (type === 'Day-off swap' && b.myDate === b.theirDate) bad('A day-off swap needs two different days.');
   if (!isKey(b.myDate) || !isKey(b.theirDate)) bad('Pick both days.');
   const t = await loadSwapsRaw(); if (t.missing) bad('The data file has no Swaps table.');
   if (t.rows.some(r => r.Status === 'Pending' && [r['Requester Email'], r['Teammate Email']].some(e => [u.email, mate.Email].includes(e)) && [r['Requester Date'], r['Teammate Date']].some(x => [b.myDate, b.theirDate].includes(x)))) bad('There is already a pending swap on one of these days.');
-  const row = { ID: uid('S'), 'Submitted At': new Date().toISOString(), 'Requester Email': u.email, 'Requester Name': u.name, 'Requester Date': b.myDate, 'Requester Shift': String(b.myShift || '').slice(0, 80), 'Teammate Email': mate.Email, 'Teammate Name': mate['Full Name'], 'Teammate Date': b.theirDate, 'Teammate Shift': String(b.theirShift || '').slice(0, 80), Reason: String(b.reason || '').slice(0, 300), Status: 'Pending' };
+  const row = { ID: uid('S'), 'Submitted At': new Date().toISOString(), 'Requester Email': u.email, 'Requester Name': u.name, 'Requester Date': b.myDate, 'Requester Shift': String(b.myShift || '').slice(0, 80), 'Teammate Email': mate.Email, 'Teammate Name': mate['Full Name'], 'Teammate Date': b.theirDate, 'Teammate Shift': String(b.theirShift || '').slice(0, 80), Reason: String(b.reason || '').slice(0, 300), Status: 'Pending', Type: type };
   await addRow(URLS.portal, T.swap, rowFor(t.headers, row));
   return { ok: true };
 }
@@ -794,7 +800,7 @@ export default async function handler(req, res) {
       case 'disputereview': out = await doDisputeReview(u, b); break;
       case 'disputerespond': out = await doDisputeRespond(u, acc, b); break;
       case 'kb': out = await readKb(u); break;
-      case 'swapmates': out = { rows: acc.rows.filter(r => r.Email && !isNo(r.Active)).map(r => ({ Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], Team: r.Team, 'Rota Name': r['Rota Name'], 'Roster Name': r['Roster Name'], 'Previous Name': r['Previous Name'], Active: r.Active })) }; break;
+      case 'swapmates': out = { rows: acc.rows.filter(r => r.Email && !isNo(r.Active) && norm(r.Team) && norm(r.Team) === norm(u.row.Team) && String(r['Portal Role']).trim() === u.role).map(r => ({ Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], Team: r.Team, 'Rota Name': r['Rota Name'], 'Roster Name': r['Roster Name'], 'Previous Name': r['Previous Name'], Active: r.Active })) }; break;
       case 'updates': out = await readUpdates(); break;
       case 'kbedit': out = await doKbEdit(u, b); break;
       case 'update': out = await doUpdate(u, b); break;

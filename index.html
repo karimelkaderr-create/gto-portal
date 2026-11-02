@@ -731,7 +731,7 @@ class Data {
   async updateSwap(id, patch){ const t = await this.swaps(true); const r = t.rows.find(x=>x.ID===id); if (!r) throw new Error('Swap not found'); Object.assign(r, patch); await this.s.setRow(CONFIG.portalDataUrl, T.swap, r._i, t.headers.map(k=>r[k]??'')); await this.swaps(true); }
   async overrides(){
     if (this.cache.ov) return this.cache.ov;
-    const sw = (await this.swaps()).rows.filter(r=>r.Status==='Approved'); const acc = (await this.access()).rows; const ov = new Map();
+    const sw = (await this.swaps()).rows.filter(r=>r.Status==='Approved'); const acc = await this.people(); const ov = new Map();
     for (const r of sw){
       const A = acc.find(x=>x.Email===r['Requester Email']), B = acc.find(x=>x.Email===r['Teammate Email']); if (!A||!B) continue;
       for (const d of [...new Set([r['Requester Date'], r['Teammate Date']])]){
@@ -812,7 +812,7 @@ class ApiData extends Data {
   async addAttendance(o){ const r = await this.call('POST','att',{ action:o.Action, email:o.Email, shiftDate:o['Shift Date'], ts:o.Timestamp, note:o.Note }); const row=r.row; row.ts=new Date(row.Timestamp); if (this.cache.att) this.cache.att.rows.push(row); }
   async addRequest(o){ await this.call('POST','req',{ email:o.Email, type:o['Leave Type'], dates:String(o.Dates).split(/[,\s]+/).filter(Boolean), reason:o.Reason }); await this.requests(true); }
   async updateRequest(id, patch){ if (patch.Status==='Cancelled'){ await this.call('POST','cancel',{id}); await this.requests(true); return; } throw new Error('Not supported'); }
-  async addSwap(o){ await this.call('POST','swap',{ teammate:o['Teammate Email'], myDate:o['Requester Date'], theirDate:o['Teammate Date'], myShift:o['Requester Shift'], theirShift:o['Teammate Shift'], reason:o.Reason }); await this.swaps(true); }
+  async addSwap(o){ await this.call('POST','swap',{ teammate:o['Teammate Email'], myDate:o['Requester Date'], theirDate:o['Teammate Date'], myShift:o['Requester Shift'], theirShift:o['Teammate Shift'], reason:o.Reason, type:o._type }); await this.swaps(true); }
   async updateSwap(id, patch){ if (patch.Status==='Cancelled') await this.call('POST','swapcancel',{id}); else await this.call('POST','swapdecide',{ id, ok:patch.Status==='Approved', note:patch.Note }); await this.swaps(true); }
   async updateAccess(row){ await this.call('POST','access',{ row }); await this.access(true); }
   async addAccess(row){ await this.call('POST','access',{ row:{...row,_i:undefined} }); await this.access(true); }
@@ -1443,36 +1443,56 @@ async function viewSchedule(){
 }
 function wireSched(){ $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
 async function teammates(u){
-  const acc=await S.D.people();
-  return acc.filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim())).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
+  const dept = x=>norm(x.Team);
+  return (await S.D.people()).filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim()) && dept(u.row) && dept(r)===dept(u.row) && String(r['Portal Role']).trim()===u.role).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
 }
 async function swapForm(){
-  const u=S.me; const mates = await teammates(u); const box=$('#swform');
-  if (!mates.length){ box.innerHTML = `<p class="muted" style="margin:0">Nobody else is set up in the portal yet, so there's no one to swap with.</p>`; return; }
-  const tomorrow = dkey(addDays(new Date(),1));
-  box.innerHTML = `<p class="muted" style="margin:0 0 4px">Swap with any colleague. A Duty Manager approves it, then both schedules update.</p>
-    <label class="f">Swap with</label><select id="swwho" class="i">${mates.map(m=>`<option value="${m.Email}">${esc(m['Full Name'])}${m.Team?' · '+esc(m.Team):''}</option>`).join('')}</select>
-    <div class="row"><div style="flex:1;min-width:140px"><label class="f">Your day</label><input type="date" id="swd1" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div>
-    <div style="flex:1;min-width:140px"><label class="f">Their day</label><input type="date" id="swd2" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div></div>
+  const u=S.me; const mates = await teammates(u); const box=$('#swform'); const where=[u.row.Team,u.role].filter(Boolean).join(' · ');
+  if (!mates.length){ box.innerHTML = `<p class="muted" style="margin:0">${u.row.Team?`Nobody else in ${esc(where)} is set up in the portal yet, so there's no one to swap with.`:`Your department isn't set yet. Ask your Duty Manager to add it in Access.`}</p>`; return; }
+  const tomorrow = dkey(addDays(new Date(),1)); let mode = S.swMode || 'shift';
+  const label = m => { const dup = mates.filter(x=>norm(x['Full Name'])===norm(m['Full Name'])).length>1; return String(m['Full Name']).trim() + (dup?' ('+String(m.Email).split('@')[0]+')':''); };
+  box.innerHTML = `<p class="muted" style="margin:0 0 10px">Swap with a colleague in your own role and department (${esc(where)}). A Duty Manager approves it, then both schedules update.</p>
+    <div class="kb-row" role="group" aria-label="Type of swap" style="margin:0 0 6px"><button class="pill" data-m="shift">Shift swap</button><button class="pill" data-m="dayoff">Day-off swap</button></div>
+    <p class="muted" id="swhelp" style="margin:6px 0 0;font-size:13.5px"></p>
+    <label class="f">Swap with</label><input id="swwho" class="i" list="swlist" placeholder="Type a name to search, or pick from the list" autocomplete="off"><datalist id="swlist">${mates.map(m=>`<option value="${esc(label(m))}"></option>`).join('')}</datalist>
+    <div class="row"><div style="flex:1;min-width:140px"><label class="f" id="swl1">Day</label><input type="date" id="swd1" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div>
+    <div style="flex:1;min-width:140px" id="swc2"><label class="f" id="swl2">Their day off</label><input type="date" id="swd2" class="i" value="${dkey(addDays(new Date(),2))}" min="${dkey(new Date())}"></div></div>
     <div id="swprev" style="margin-top:12px"></div>
     <label class="f">Reason</label><input id="swwhy" class="i" placeholder="Optional">
     <button class="btn primary big" id="swgo" style="margin-top:14px;width:100%">Send swap request</button>`;
-  const preview = async () => {
-    const B = mates.find(m=>m.Email===$('#swwho').value); const d1=$('#swd1').value, d2=$('#swd2').value; if(!d1||!d2) return;
-    const dates=[...new Set([d1,d2])].sort();
-    const rows = await Promise.all(dates.map(async d=>{ const dt=fromKey(d); return [d,(await S.D.shiftFor(u.row,dt)).text,(await S.D.shiftFor(B,dt)).text]; }));
-    const lbl = t => { const ps=parseShift(t); return ps?ps.label:(t||'not on rota'); };
-    $('#swprev').innerHTML = `<div class="tablewrap"><table><thead><tr><th>Day</th><th>You now</th><th>${esc(String(B['Full Name']).split(/\s+/)[0])} now</th><th>After the swap</th></tr></thead><tbody>${rows.map(([d,a,b])=>`<tr><td>${fmtDate(d)}</td><td>${esc(lbl(a))}</td><td>${esc(lbl(b))}</td><td>You: <b>${esc(lbl(b))}</b></td></tr>`).join('')}</tbody></table></div>
-      ${rows.every(([d,a,b])=>a===b)?'<div class="alert warn" style="margin:10px 0 0">You both have the same shift on these days, so the swap changes nothing.</div>':''}`;
+  const find = () => { const v=norm($('#swwho').value); return mates.find(m=>norm(label(m))===v) || mates.find(m=>norm(m['Full Name'])===v); };
+  const dates = () => { const d1=$('#swd1').value; return [d1, mode==='shift' ? d1 : $('#swd2').value]; };
+  const lbl = t => { const ps=parseShift(t); return ps?ps.label:(t||'not on rota'); };
+  const isOff = t => !parseShift(t);
+  const paintMode = () => {
+    box.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on', b.dataset.m===mode));
+    $('#swc2').style.display = mode==='shift' ? 'none' : '';
+    $('#swl1').textContent = mode==='shift' ? 'Day' : 'My day off';
+    $('#swl2').textContent = 'Their day off';
+    $('#swhelp').textContent = mode==='shift' ? 'Shift swap: you and your colleague both work that day, and you exchange shifts.' : "Day-off swap: you take each other's day off. You work their day off and they work yours.";
   };
-  ['swwho','swd1','swd2'].forEach(id=>$('#'+id).onchange=preview); await preview();
+  const preview = async () => {
+    const B = find(); const [d1,d2]=dates(); if (!B||!d1||!d2){ $('#swprev').innerHTML=''; return; }
+    const days=[...new Set([d1,d2])].sort();
+    const rows = await Promise.all(days.map(async d=>{ const dt=fromKey(d); return [d,(await S.D.shiftFor(u.row,dt)).text,(await S.D.shiftFor(B,dt)).text]; }));
+    const mine = rows.find(r=>r[0]===d1), theirs = rows.find(r=>r[0]===d2); const warns=[];
+    if (mode==='shift'){ if (isOff(mine[1])||isOff(mine[2])) warns.push('One of you is off that day. To swap days off instead, use Day-off swap.'); }
+    else { if (d1===d2) warns.push('Pick two different days.'); if (!isOff(mine[1])) warns.push(`You are working on ${fmtDate(d1)}. A day-off swap should start from a day you are off.`); if (!isOff(theirs[2])) warns.push(`${String(B['Full Name']).split(/\s+/)[0]} is working on ${fmtDate(d2)}. Pick one of their days off.`); }
+    $('#swprev').innerHTML = `<div class="tablewrap"><table><thead><tr><th>Day</th><th>You now</th><th>${esc(String(B['Full Name']).split(/\s+/)[0])} now</th><th>After the swap</th></tr></thead><tbody>${rows.map(([d,a,b])=>`<tr><td>${fmtDate(d)}</td><td>${esc(lbl(a))}</td><td>${esc(lbl(b))}</td><td>You: <b>${esc(lbl(b))}</b></td></tr>`).join('')}</tbody></table></div>
+      ${warns.map(w=>`<div class="alert warn" style="margin:10px 0 0">${esc(w)}</div>`).join('')}${mode==='shift'&&rows.every(([d,a,b])=>a===b)?'<div class="alert warn" style="margin:10px 0 0">You both have the same shift on this day, so the swap changes nothing.</div>':''}`;
+  };
+  box.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ mode=S.swMode=b.dataset.m; paintMode(); preview(); });
+  ['swwho','swd1','swd2'].forEach(id=>{ $('#'+id).onchange=preview; $('#'+id).oninput=id==='swwho'?preview:null; });
+  paintMode(); await preview();
   $('#swgo').onclick = async () => {
-    const B = mates.find(m=>m.Email===$('#swwho').value); const d1=$('#swd1').value, d2=$('#swd2').value;
-    if (!d1||!d2) return toast('Pick both days');
+    const B = find(); const [d1,d2]=dates();
+    if (!B) return toast('Pick a colleague from the list');
+    if (!d1||!d2) return toast('Pick the day'+(mode==='shift'?'':'s'));
+    if (mode==='dayoff' && d1===d2) return toast('A day-off swap needs two different days');
     const sw = (await S.D.swaps(true)).rows; if (sw.some(r=>r.Status==='Pending' && [r['Requester Email'],r['Teammate Email']].includes(u.email) && [r['Requester Date'],r['Teammate Date']].some(x=>[d1,d2].includes(x)))) return toast('You already have a pending swap on one of these days');
     $('#swgo').disabled=true;
     try{
-      await S.D.addSwap({ ID:uid('S'), 'Submitted At':new Date().toISOString(), 'Requester Email':u.email, 'Requester Name':u.name, 'Requester Date':d1, 'Requester Shift':(await S.D.shiftFor(u.row,fromKey(d1))).text, 'Teammate Email':B.Email, 'Teammate Name':B['Full Name'], 'Teammate Date':d2, 'Teammate Shift':(await S.D.shiftFor(B,fromKey(d2))).text, Reason:$('#swwhy').value.trim(), Status:'Pending' });
+      await S.D.addSwap({ ID:uid('S'), 'Submitted At':new Date().toISOString(), 'Requester Email':u.email, 'Requester Name':u.name, 'Requester Date':d1, 'Requester Shift':(await S.D.shiftFor(u.row,fromKey(d1))).text, 'Teammate Email':B.Email, 'Teammate Name':B['Full Name'], 'Teammate Date':d2, 'Teammate Shift':(await S.D.shiftFor(B,fromKey(d2))).text, Reason:$('#swwhy').value.trim(), Status:'Pending', Type: mode==='dayoff'?'Day-off swap':'Shift swap', _type:mode });
       toast('Swap request sent'); viewSchedule();
     }catch(e){ alertBox(e); $('#swgo').disabled=false; }
   };
@@ -1481,7 +1501,8 @@ function swapLine(r, me){
   const other = r['Requester Email']===me ? r['Teammate Name'] : r['Requester Name'];
   const same = r['Requester Date']===r['Teammate Date'];
   const lbl = t => { const ps=parseShift(t); return ps?ps.label:(t||'—'); };
-  return `${same?fmtDate(r['Requester Date']):fmtDate(r['Requester Date'])+' and '+fmtDate(r['Teammate Date'])}: ${esc(r['Requester Name'].split(/\s+/)[0])} ${esc(lbl(r['Requester Shift']))} ⇄ ${esc(r['Teammate Name'].split(/\s+/)[0])} ${esc(lbl(r['Teammate Shift']))}`;
+  const kind = r.Type || (same?'Shift swap':'Day-off swap');
+  return `<b>${esc(kind)}</b> · ${same?fmtDate(r['Requester Date']):fmtDate(r['Requester Date'])+' and '+fmtDate(r['Teammate Date'])}: ${esc(r['Requester Name'].split(/\s+/)[0])} ${esc(lbl(r['Requester Shift']))} ⇄ ${esc(r['Teammate Name'].split(/\s+/)[0])} ${esc(lbl(r['Teammate Shift']))}`;
 }
 async function paintMySwaps(){
   const u=S.me; const list=(await S.D.swaps()).rows.filter(r=>r['Requester Email']===u.email||r['Teammate Email']===u.email).reverse();
