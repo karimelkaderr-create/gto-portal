@@ -794,6 +794,7 @@ export default async function handler(req, res) {
       case 'disputereview': out = await doDisputeReview(u, b); break;
       case 'disputerespond': out = await doDisputeRespond(u, acc, b); break;
       case 'kb': out = await readKb(u); break;
+      case 'swapmates': out = { rows: acc.rows.filter(r => r.Email && !isNo(r.Active)).map(r => ({ Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], Team: r.Team, 'Rota Name': r['Rota Name'], 'Roster Name': r['Roster Name'], 'Previous Name': r['Previous Name'], Active: r.Active })) }; break;
       case 'updates': out = await readUpdates(); break;
       case 'kbedit': out = await doKbEdit(u, b); break;
       case 'update': out = await doUpdate(u, b); break;

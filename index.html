@@ -746,9 +746,10 @@ class Data {
     const o = person.Email ? (await this.overrides()).get(person.Email+'|'+dkey(date)) : null;
     return o ? { ...base, text:o.text, original:base.text, swapWith:o.with } : base;
   }
+  async people(){ return (await this.access()).rows; }
   async baseShift(person, date){
     const r = await this.rotaFor(date); if (!r) return { text:'', rota:null };
-    if (!r.idx){ const acc = await this.access(); r.idx = buildRotaIndex(acc.rows, r.people); }
+    if (!r.idx){ r.idx = buildRotaIndex(await this.people(), r.people); }
     const p = matchRota(person, r.people, r.idx); return { text: p ? (p.days[dkey(date)]||'') : '', rota:p };
   }
 }
@@ -787,6 +788,12 @@ class ApiData extends Data {
     this.absorb(d);
   }
   async access(force){ if (force || !this.cache.access) await this.load(['access']); return this.cache.access; }
+  // everyone who can be a swap partner (agents are only sent their own team in the Access list)
+  async people(){
+    if (!this._people){ const acc=(await this.access()).rows;
+      if (isMgr(S.me)) this._people=acc;
+      else { let sm=[]; try{ sm=(await this.call('GET','swapmates')).rows||[]; }catch(e){} const have=new Set(acc.map(r=>r.Email)); this._people=[...acc, ...sm.filter(r=>!have.has(r.Email))]; } }
+    return this._people; }
   async settings(){ if (!this.cache.settings) await this.load(['settings']); return this.cache.settings; }
   async attendance(force){ if (force || !this.cache.att) await this.load(['attendance']); return this.cache.att; }
   async requests(force){ if (force || !this.cache.req) await this.load(['requests']); return this.cache.req; }
@@ -1436,7 +1443,7 @@ async function viewSchedule(){
 }
 function wireSched(){ $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
 async function teammates(u){
-  const acc=(await S.D.access()).rows;
+  const acc=await S.D.people();
   return acc.filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim())).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
 }
 async function swapForm(){
