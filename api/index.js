@@ -272,7 +272,7 @@ async function readData(u, acc, parts) {
 function rowFor(headers, o) { return headers.map(k => o[k] ?? ''); }
 async function doAttendance(u, acc, b) {
   const action = String(b.action || '');
-  if (!['Clock In', 'Break Start', 'Break End', 'Clock Out'].includes(action)) bad('Unknown action.');
+  if (!['Clock In', 'Break Start', 'Break End', 'Coaching Start', 'Coaching End', 'Clock Out'].includes(action)) bad('Unknown action.');
   const target = normEmail(b.email || u.email);
   const person = acc.rows.find(r => r.Email === target); if (!person) bad('Person not found.');
   let ts = new Date(), note = String(b.note || '').slice(0, 300);
@@ -349,10 +349,8 @@ async function doDecide(u, acc, b) {
 async function doCancel(u, b) { const t = await loadRequestsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Request not found.'); if (r.Email !== u.email && r['Submitted By'] !== u.email) deny(); if (!/^Pending/.test(r.Status)) bad('Only pending requests can be cancelled.'); await updateReq(t, r, { Status: 'Cancelled' }); return { ok: true }; }
 async function doRetry(u, acc, b) { if (!['Duty Manager', 'General Manager'].includes(u.role)) deny(); const t = await loadRequestsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r || r.Status !== 'Approved' || r['Written To Tracker'] === 'Yes') bad('Nothing to retry.'); await writeTracker(t, r, acc); return { ok: true }; }
 async function doSwap(u, acc, b) {
-  const mate = acc.rows.find(r => r.Email === normEmail(b.teammate)); if (!mate || isNo(mate.Active)) bad('Teammate not found.');
-  if (mate.Email === u.email) bad('Pick a teammate.');
-  const sameTeam = u.row['Manager Email'] ? mate['Manager Email'] === u.row['Manager Email'] : (u.row.Team && mate.Team === u.row.Team);
-  if (!sameTeam || mate['Portal Role'] !== u.role) deny('You can only swap with someone in your own team.');
+  const mate = acc.rows.find(r => r.Email === normEmail(b.teammate)); if (!mate || isNo(mate.Active)) bad('Colleague not found.');
+  if (mate.Email === u.email) bad('Pick a colleague to swap with.');
   if (!isKey(b.myDate) || !isKey(b.theirDate)) bad('Pick both days.');
   const t = await loadSwapsRaw(); if (t.missing) bad('The data file has no Swaps table.');
   if (t.rows.some(r => r.Status === 'Pending' && [r['Requester Email'], r['Teammate Email']].some(e => [u.email, mate.Email].includes(e)) && [r['Requester Date'], r['Teammate Date']].some(x => [b.myDate, b.theirDate].includes(x)))) bad('There is already a pending swap on one of these days.');
@@ -384,7 +382,7 @@ async function doAccess(u, accCached, b) {
 
 /* ---------------- quality: evaluations + disputes ---------------- */
 const DEFAULT_QUALITY_URL = process.env.QUALITY_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/karim_abdelkader_gto_org_uk/IQCm4e8B9OfhTLZuFVv_YcYqAcy92G6NTopq-d0MHsDT9MI';
-const DISPUTE_HEADERS = ['ID', 'Raised At', 'Eval ID', 'Month', 'Agent Email', 'Agent Name', 'Chat Date', 'Client', 'Score', 'Raised By', 'Reason', 'Status', 'Responded By', 'Responded At', 'Response', 'Email Sent'];
+const DISPUTE_HEADERS = ['ID', 'Raised At', 'Eval ID', 'Month', 'Agent Email', 'Agent Name', 'Chat Date', 'Client', 'Score', 'Raised By', 'Reason', 'Status', 'Responded By', 'Responded At', 'Response', 'Email Sent', 'Manager Email', 'Reviewed By', 'Reviewed At', 'Manager Note'];
 const QFILE_HEADERS = ['Month', 'File Link'];
 async function tableExists(url, name) { const b = await book(url); try { await g('GET', `${b}/tables/${encodeURIComponent(name)}?$select=name`); return true; } catch (e) { return false; } }
 async function ensureTable(url, sheet, name, headers, firstRows = []) {
@@ -451,7 +449,15 @@ async function loadEvaluations(acc) {
   }
   qCache = { at: Date.now(), items }; return items;
 }
-async function loadDisputes() { await ensureTable(URLS.portal, 'Disputes', 'tblDisputes', DISPUTE_HEADERS); const t = await table(URLS.portal, 'tblDisputes'); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Agent Email'] = normEmail(r['Agent Email']); r['Raised By'] = normEmail(r['Raised By']); r['Raised At'] = tsString(r['Raised At']); r['Responded At'] = tsString(r['Responded At']); }); return t; }
+async function loadDisputes() {
+  await ensureTable(URLS.portal, 'Disputes', 'tblDisputes', DISPUTE_HEADERS);
+  let t = await table(URLS.portal, 'tblDisputes');
+  const missing = DISPUTE_HEADERS.filter(h => !t.headers.includes(h));
+  if (missing.length) { const b = await book(URLS.portal); for (const name of missing) await g('POST', `${b}/tables/tblDisputes/columns/add`, { name }); t = await table(URLS.portal, 'tblDisputes'); }
+  t.rows = t.rows.filter(r => r.ID);
+  t.rows.forEach(r => { r['Agent Email'] = normEmail(r['Agent Email']); r['Raised By'] = normEmail(r['Raised By']); r['Manager Email'] = normEmail(r['Manager Email']); r['Raised At'] = tsString(r['Raised At']); r['Responded At'] = tsString(r['Responded At']); r['Reviewed At'] = tsString(r['Reviewed At']); });
+  return t;
+}
 const isQuality = u => u.role === 'Quality' || yes(u.row['Quality Team']);
 function canSeeEval(u, e, team) {
   if (seesAll(u) || isQuality(u)) return true;
@@ -464,20 +470,38 @@ async function readQuality(u, acc) {
   const team = teamEmails(u, acc); const [ev, dt] = await Promise.all([loadEvaluations(acc), loadDisputes()]);
   const evals = ev.filter(e => canSeeEval(u, e, team));
   const ids = new Set(evals.map(e => e.id));
-  const disputes = dt.rows.filter(d => ids.has(d['Eval ID']) || d['Raised By'] === u.email || isQuality(u) || seesAll(u));
-  return { evals, disputes, canDispute: ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role), canRespond: isQuality(u), quality: isQuality(u) };
+  const disputes = dt.rows.filter(d => {
+    if (d.Status === 'With Manager') return seesAll(u) || d['Manager Email'] === u.email || d['Agent Email'] === u.email || d['Raised By'] === u.email;
+    return ids.has(d['Eval ID']) || d['Raised By'] === u.email || isQuality(u) || seesAll(u);
+  });
+  const isManagerRole = ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role);
+  return { evals, disputes, canDispute: u.role !== 'HR' && !(isQuality(u) && !isManagerRole && u.role !== 'Agent'), canReview: isManagerRole, canRespond: isQuality(u), quality: isQuality(u) };
 }
 function esch(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 async function doDispute(u, acc, b) {
-  if (!['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role)) deny('Only team leaders and managers can raise disputes.');
   const reason = String(b.reason || '').trim(); if (reason.length < 5) bad('Please explain the dispute.');
   const team = teamEmails(u, acc); const ev = (await loadEvaluations(acc)).find(e => e.id === b.evalId); if (!ev) bad('Evaluation not found.');
-  if (u.role === 'Team Leader' && !canSeeEval(u, ev, team)) deny('You can only dispute evaluations for your own team.');
-  const t = await loadDisputes(); if (t.rows.some(d => d['Eval ID'] === ev.id && d.Status === 'Open')) bad('This evaluation already has an open dispute.');
-  const row = { ID: uid('D'), 'Raised At': new Date().toISOString(), 'Eval ID': ev.id, Month: ev.month, 'Agent Email': ev.agentEmail, 'Agent Name': ev.agentFull, 'Chat Date': ev.date, Client: ev.client, Score: ev.score, 'Raised By': u.email, Reason: reason.slice(0, 1000), Status: 'Open' };
-  row['Email Sent'] = 'Portal only';
+  const own = ev.agentEmail === u.email;
+  const isManagerRole = ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role);
+  if (!own && !isManagerRole) deny('You can only dispute your own evaluations.');
+  if (!own && u.role === 'Team Leader' && !canSeeEval(u, ev, team)) deny('You can only dispute evaluations for your own team.');
+  const t = await loadDisputes(); if (t.rows.some(d => d['Eval ID'] === ev.id && ['Open', 'With Manager'].includes(d.Status))) bad('This evaluation already has a dispute in progress.');
+  // An agent's dispute goes to their direct manager first; a manager raising one for the team goes straight to Quality.
+  const person = acc.rows.find(r => r.Email === ev.agentEmail);
+  const mgrEmail = own ? normEmail((u.row['Manager Email'] || (person && person['Manager Email']) || ev.tlEmail || '')) : '';
+  const row = { ID: uid('D'), 'Raised At': new Date().toISOString(), 'Eval ID': ev.id, Month: ev.month, 'Agent Email': ev.agentEmail, 'Agent Name': ev.agentFull, 'Chat Date': ev.date, Client: ev.client, Score: ev.score, 'Raised By': u.email, Reason: reason.slice(0, 1000), Status: own ? 'With Manager' : 'Open', 'Email Sent': 'Portal only', 'Manager Email': mgrEmail };
   await addRow(URLS.portal, 'tblDisputes', rowFor(t.headers, row));
-  qCache = null; return { ok: true };
+  qCache = null; return { ok: true, status: row.Status };
+}
+async function doDisputeReview(u, b) {
+  if (!['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role)) deny('Only managers can review disputes.');
+  const t = await loadDisputes(); const d = t.rows.find(x => x.ID === b.id); if (!d) bad('Dispute not found.');
+  if (d.Status !== 'With Manager') bad('This dispute is no longer waiting for a manager.');
+  if (d['Agent Email'] === u.email) deny("You can't review your own dispute.");
+  if (!(u.email === d['Manager Email'] || ['Duty Manager', 'General Manager'].includes(u.role))) deny("Only the agent's direct manager (or a Duty Manager) can review this dispute.");
+  Object.assign(d, { Status: b.ok ? 'Open' : 'Declined', 'Reviewed By': u.email, 'Reviewed At': new Date().toISOString(), 'Manager Note': String(b.note || '').slice(0, 1000) });
+  await setRow(URLS.portal, 'tblDisputes', d._i, t.headers.map(k => d[k] ?? ''));
+  qCache = null; return { ok: true, status: d.Status };
 }
 async function doDisputeRespond(u, acc, b) {
   if (!isQuality(u)) deny('Only the quality team can respond to disputes.');
@@ -575,9 +599,20 @@ async function loadKb() {
     return { items, cats, source, error: error.slice(0, 200), loadedAt: new Date().toISOString() };
   });
 }
-const UPDATE_HEADERS = ['ID', 'Posted At', 'Posted By', 'Posted By Name', 'Title', 'Body', 'Category', 'Pinned', 'Active'];
-async function loadUpdates() { await ensureTable(URLS.portal, 'Updates', 'tblUpdates', UPDATE_HEADERS); const t = await table(URLS.portal, 'tblUpdates'); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Posted At'] = tsString(r['Posted At']); }); return t; }
+const UPDATE_HEADERS = ['ID', 'Posted At', 'Posted By', 'Posted By Name', 'Title', 'Body', 'Category', 'Pinned', 'Active', 'Edited At', 'Edited By'];
+async function loadUpdates() {
+  await ensureTable(URLS.portal, 'Updates', 'tblUpdates', UPDATE_HEADERS);
+  let t = await table(URLS.portal, 'tblUpdates');
+  const missing = UPDATE_HEADERS.filter(h => !t.headers.includes(h));
+  if (missing.length) { const b = await book(URLS.portal); for (const name of missing) await g('POST', `${b}/tables/tblUpdates/columns/add`, { name }); t = await table(URLS.portal, 'tblUpdates'); }
+  t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Posted At'] = tsString(r['Posted At']); r['Edited At'] = tsString(r['Edited At']); });
+  return t;
+}
 const canPost = u => u.admin || ['Team Leader', 'Duty Manager', 'General Manager', 'HR', 'Quality'].includes(u.role);
+async function readUpdates() {
+  const up = await cached('updates', 30e3, loadUpdates);
+  return { updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))) };
+}
 async function readKb(u) {
   const [kb, up] = await Promise.all([loadKb(), cached('updates', 30e3, loadUpdates)]);
   return { ...kb, updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))), canPost: canPost(u), ai: true, aiPlus: !!AI_KEY, seesLog: ['Duty Manager', 'General Manager', 'Quality'].includes(u.role) || u.admin || yes(u.row['Quality Team']) };
@@ -586,7 +621,12 @@ async function doUpdate(u, b) {
   if (!canPost(u)) deny('Only team leaders and managers can post updates.');
   const t = await loadUpdates();
   if (b.id) { const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Update not found.'); if (r['Posted By'] !== u.email && !['Duty Manager', 'General Manager'].includes(u.role) && !u.admin) deny('You can only change your own updates.');
-    if (b.remove) r.Active = 'No'; if (b.pin != null) r.Pinned = b.pin ? 'Yes' : 'No'; await setRow(URLS.portal, 'tblUpdates', r._i, t.headers.map(k => r[k] ?? '')); return { ok: true }; }
+    if (b.remove) r.Active = 'No'; if (b.pin != null) r.Pinned = b.pin ? 'Yes' : 'No';
+    if (b.title != null || b.body != null) {
+      const title = String(b.title ?? r.Title).trim().slice(0, 140), body = String(b.body ?? r.Body).trim().slice(0, 4000); if (title.length < 3) bad('Add a title.'); if (body.length < 3) bad('Write the update.');
+      Object.assign(r, { Title: title, Body: body, Category: String(b.category || r.Category || 'General').slice(0, 40), 'Edited At': new Date().toISOString(), 'Edited By': u.email });
+    }
+    await setRow(URLS.portal, 'tblUpdates', r._i, t.headers.map(k => r[k] ?? '')); return { ok: true }; }
   const title = String(b.title || '').trim().slice(0, 140), body = String(b.body || '').trim().slice(0, 4000); if (title.length < 3) bad('Add a title.'); if (body.length < 3) bad('Write the update.');
   const row = { ID: uid('U'), 'Posted At': new Date().toISOString(), 'Posted By': u.email, 'Posted By Name': u.name, Title: title, Body: body, Category: String(b.category || 'General').slice(0, 40), Pinned: b.pin ? 'Yes' : 'No', Active: 'Yes' };
   await addRow(URLS.portal, 'tblUpdates', rowFor(t.headers, row)); return { ok: true, id: row.ID };
@@ -599,7 +639,7 @@ const ASKLOG_HEADERS = ['ID', 'Asked At', 'Email', 'Name', 'Question', 'Answer T
 async function assistIndex() {
   const [kb, up] = await Promise.all([loadKb(), cached('updates', 30e3, loadUpdates)]);
   const ups = up.rows.filter(r => !isNo(r.Active));
-  const key = kb.loadedAt + '|' + ups.map(r => r.ID).join(',');
+  const key = kb.loadedAt + '|' + ups.map(r => r.ID + (r['Edited At'] || '')).join(',');
   if (!ixCache || ixCache.key !== key) ixCache = { key, ix: buildIndex(kb.items, ups), kb, ups };
   return ixCache;
 }
@@ -687,8 +727,10 @@ export default async function handler(req, res) {
       case 'access': out = await doAccess(u, acc, b); break;
       case 'quality': out = await readQuality(u, acc); break;
       case 'dispute': out = await doDispute(u, acc, b); break;
+      case 'disputereview': out = await doDisputeReview(u, b); break;
       case 'disputerespond': out = await doDisputeRespond(u, acc, b); break;
       case 'kb': out = await readKb(u); break;
+      case 'updates': out = await readUpdates(); break;
       case 'update': out = await doUpdate(u, b); break;
       case 'ask': out = await doAsk(u, b); break;
       case 'asklog': out = await readAskLog(u); break;

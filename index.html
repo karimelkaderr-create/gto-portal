@@ -86,6 +86,8 @@ main{max-width:1300px;padding:20px 36px 80px}
 .sb-state b{display:block;font-weight:600;font-size:15px}.sb-state span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .statusbar.m-work .dot{background:var(--ok);box-shadow:0 0 0 5px rgba(98,211,148,.18)}
 .statusbar.m-break .dot{background:var(--gold);box-shadow:0 0 0 5px rgba(227,185,90,.2)}
+.statusbar.m-coach .dot{background:#8FB4FF;box-shadow:0 0 0 5px rgba(143,180,255,.2)}
+.m-coach .seg button[data-st="coach"].on{background:linear-gradient(135deg,#B9D0FF,#7FA2F0);color:#0B1B3F;box-shadow:0 4px 16px rgba(143,180,255,.3)}
 .statusbar.m-over .dot{background:var(--bad);box-shadow:0 0 0 5px rgba(255,138,128,.2)}.statusbar.m-over .sb-state b{color:var(--bad)}
 .seg{display:inline-flex;padding:4px;gap:4px;border-radius:14px;background:rgba(0,0,0,.28);border:1px solid var(--edge-2)}
 .seg button{display:inline-flex;align-items:center;gap:8px;border:0;background:none;color:var(--muted);padding:9px 18px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14.5px;white-space:nowrap}
@@ -207,6 +209,13 @@ input[type=checkbox]{accent-color:var(--gold)}
 .loading{padding:70px;text-align:center;color:var(--muted)}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 
+/* ---------- Update notification ---------- */
+.upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
+.upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
+.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
+@keyframes upin{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}@keyframes upring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
+@media (prefers-reduced-motion:reduce){.upnote,.upnote .ic{animation:none}}
+@media (max-width:820px){.upnote{top:auto;bottom:92px;right:16px;left:16px;max-width:none}}
 /* ---------- Knowledge base ---------- */
 .kb-hero{position:relative;padding:22px 24px 18px;background:linear-gradient(135deg,rgba(227,185,90,.14),rgba(255,255,255,.035) 55%);border:1px solid var(--edge-2);border-radius:var(--r);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
 .kb-search{position:relative}.kb-search svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:20px;height:20px;stroke:var(--gold);fill:none;stroke-width:2}
@@ -843,7 +852,7 @@ const ICON = {
   admin:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.9 2.6 2.6 3 5.2"/></svg>',
   out:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h11"/></svg>'
 };
-const PAGES = { kb:['Knowledge base','Promotions, products and team updates — with GTO Assist to answer questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
+const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
@@ -852,7 +861,7 @@ async function render(){
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
   const swapsWaiting = (await swapQueue()).length;
-  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Knowledge']] : [['home','Home'],['att','Log in'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Knowledge']];
+  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']];
   if (u.admin) tabs.push(['admin','Access']);
   const hour=new Date().getHours(); const greet = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const [title, sub] = S.tab==='home' ? [`${greet}, ${esc(String(u.name).split(/\s+/)[0])}`, isMgr(u)?'Here is what needs your attention today.':'Here is your day.'] : PAGES[S.tab];
@@ -860,7 +869,7 @@ async function render(){
   <div class="shell">
     <aside class="side">
       <div class="brand"><img src="${LOGO}" alt="GTO – Global Travel Organisation"><span class="bt"><b>GTO</b><span>Operations portal</span></span></div>
-      <nav class="nav" aria-label="Main">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}" ${S.tab===k?'aria-current="page"':''}>${ICON[k]}<span>${l}</span>${k==='leave'&&(pend+alerts)?`<span class="badge" title="Waiting for you">${pend+alerts}</span>`:''}${k==='sched'&&swapsWaiting?`<span class="badge" title="Swap requests waiting">${swapsWaiting}</span>`:''}</button>`).join('')}</nav>
+      <nav class="nav" aria-label="Main">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}" ${S.tab===k?'aria-current="page"':''}>${ICON[k]}<span>${l}</span>${k==='leave'&&(pend+alerts)?`<span class="badge" title="Waiting for you">${pend+alerts}</span>`:''}${k==='kb'&&S.upUnread?`<span class="badge" title="New updates">${S.upUnread}</span>`:''}${k==='sched'&&swapsWaiting?`<span class="badge" title="Swap requests waiting">${swapsWaiting}</span>`:''}</button>`).join('')}</nav>
       <div class="me"><div class="av">${esc(initials(u.name))}</div><div class="who"><b>${esc(u.name)}</b><span>${esc(u.role)}</span></div>${DEMO?'':`<button id="signout" title="Sign out" aria-label="Sign out">${ICON.out}</button>`}</div>
     </aside>
     <div class="mainwrap">
@@ -876,6 +885,7 @@ async function render(){
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
   $('#signout') && ($('#signout').onclick = ()=>msalApp.logoutRedirect());
   $('#demoAs') && ($('#demoAs').onchange = e=>{ S.demoAs=e.target.value; S.tab='home'; boot(); });
+  startUpdatePoll();
   if (agent) await mountStatusBar();
   try {
     await ({home:viewHome, att:viewAttendance, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
@@ -888,17 +898,19 @@ async function mountStatusBar(){
   const el=$('#statusbar'); let armed=null, busy=false;
   const paint = () => {
     const st = shiftState(S.D.cache.att.rows, u.email);
-    const mode = !st.open ? 'out' : st.onBreak ? 'break' : 'work';
+    const mode = !st.open ? 'out' : st.onBreak ? 'break' : st.onCoach ? 'coach' : 'work';
     const since = st.open ? (Date.now()-st.open.in)/6e4 - st.breakMins : 0;
     const left = bm - st.breakMins;
     const text = mode==='out' ? `<b>Logged out</b><span>Press Work when your shift starts</span>`
       : mode==='work' ? `<b>Working</b><span>since ${hm(st.open.in)} · ${fmtMins(since)} worked · break ${Math.round(st.breakMins)}/${bm} min</span>`
+      : mode==='coach' ? `<b>In coaching</b><span>since ${hm(st.onCoach)} · ${fmtMins(st.coachMins)} · press Work when you're done</span>`
       : `<b>${left>=0?'On break':'Break over'}</b><span>${left>=0?fmtMins(left)+' left':'over by '+fmtMins(-left)} · press Work when you're back</span>`;
     el.className = 'statusbar m-'+mode+(mode==='break'&&left<0?' m-over':'');
     el.innerHTML = `<div class="sb-state"><i class="dot"></i><div>${text}</div></div>
       <div class="seg" role="group" aria-label="Set your status">
         <button data-st="work" class="${mode==='work'?'on':''}" ${busy?'disabled':''} aria-pressed="${mode==='work'}"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>Work</button>
         <button data-st="break" class="${mode==='break'?'on':''}" ${busy||mode==='out'?'disabled':''} aria-pressed="${mode==='break'}" ${mode==='out'?'title="Press Work first"':''}><svg viewBox="0 0 24 24"><path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 010 5H17"/><path d="M8 3v3M12 3v3"/></svg>Break</button>
+        <button data-st="coach" class="${mode==='coach'?'on':''}" ${busy||mode==='out'?'disabled':''} aria-pressed="${mode==='coach'}" ${mode==='out'?'title="Press Work first"':''}><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M17 8.5h4M17 12h4M17 15.5h3"/></svg>Coaching</button>
         <button data-st="out" class="${mode==='out'?'on':''} ${armed==='out'?'armed':''}" ${busy||mode==='out'?'disabled':''} aria-pressed="${mode==='out'}"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1011.4 0"/></svg>${armed==='out'?'Confirm log out':'Log out'}</button>
       </div>`;
     el.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>choose(b.dataset.st, mode));
@@ -909,9 +921,11 @@ async function mountStatusBar(){
     armed=null; busy=true; paint();
     try{
       const cur = shiftState(S.D.cache.att.rows, u.email); const date = cur.open ? cur.open.date : dkey(new Date());
-      if (want==='work'){ if (!cur.open) await recordAction('Clock In', u.row, date); else if (cur.onBreak) await recordAction('Break End', u.row, date); toast((cur.open?'Back at work':'Working')+' from '+hm(new Date())); }
-      if (want==='break'){ await recordAction('Break Start', u.row, date); toast('Break started at '+hm(new Date())); }
-      if (want==='out'){ if (cur.onBreak) await recordAction('Break End', u.row, date, 'auto: logged out on break'); await recordAction('Clock Out', u.row, date); toast('Logged out at '+hm(new Date())); }
+      const endOpen = async why => { if (cur.onBreak) await recordAction('Break End', u.row, date, why); if (cur.onCoach) await recordAction('Coaching End', u.row, date, why); };
+      if (want==='work'){ if (!cur.open) await recordAction('Clock In', u.row, date); else await endOpen(''); toast((cur.open?'Back at work':'Working')+' from '+hm(new Date())); }
+      if (want==='break'){ if (cur.onCoach) await recordAction('Coaching End', u.row, date, 'auto: went on break'); await recordAction('Break Start', u.row, date); toast('Break started at '+hm(new Date())); }
+      if (want==='coach'){ if (cur.onBreak) await recordAction('Break End', u.row, date, 'auto: went to coaching'); await recordAction('Coaching Start', u.row, date); toast('Coaching started at '+hm(new Date())); }
+      if (want==='out'){ await endOpen('auto: logged out'); await recordAction('Clock Out', u.row, date); toast('Logged out at '+hm(new Date())); }
     }catch(e){ alertBox(e); }
     busy=false; paint(); S._boardPaint && S._boardPaint();
   };
@@ -931,6 +945,7 @@ async function mountBoard(el, after){
     const s2 = shiftState(S.D.cache.att.rows, u.email); const used = s2.breakMins; const pct = Math.min(100, used/bm*100);
     let cls='s-out', state=actions?'Not clocked in':'Logged out', note= ps?`Shift starts ${pad(Math.floor(ps.start/60)%24)}:${pad(ps.start%60)}`:(actions?'Clock in when you start':'Press Work in the top bar to start'), btns=`<button class="bbtn go" data-act="Clock In">Clock in</button>`;
     if (s2.open && s2.onBreak){ const left=bm-used; cls= left>=0?'s-break':'s-over'; state = left>=0?'On break':'Break over'; note = left>=0?`${fmtMins(left)} left`:`Over by ${fmtMins(-left)}`; btns=`<button class="bbtn go" data-act="Break End">End break</button>`; }
+    else if (s2.open && s2.onCoach){ cls='s-in'; state='In coaching'; note=`Since ${hm(s2.onCoach)}`; btns=`<button class="bbtn go" data-act="Coaching End">End coaching</button>`; }
     else if (s2.open){ cls='s-in'; state=actions?'Clocked in':'Working'; note=`Since ${hm(s2.open.in)}`; btns=`<button class="bbtn go" data-act="Break Start">Start break</button><button class="bbtn ghost" data-act="Clock Out">Clock out</button>`; }
     el.innerHTML = `<section class="board ${cls}" aria-live="polite">
       <div class="b-cell b-time"><span class="b-l">Now</span><span class="b-v">${hm(new Date())}</span><span class="b-s">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</span></div>
@@ -945,8 +960,9 @@ async function mountBoard(el, after){
         const cur = shiftState(S.D.cache.att.rows, u.email);
         const date = cur.open ? cur.open.date : dkey(new Date());
         if (act==='Clock Out' && cur.onBreak) await recordAction('Break End', u.row, date, 'auto: clocked out on break');
+        if (act==='Clock Out' && cur.onCoach) await recordAction('Coaching End', u.row, date, 'auto: clocked out in coaching');
         await recordAction(act, u.row, date);
-        toast({ 'Clock In':'Clocked in', 'Clock Out':'Clocked out', 'Break Start':'Break started', 'Break End':'Break ended' }[act]+' at '+hm(new Date()));
+        toast({ 'Clock In':'Clocked in', 'Clock Out':'Clocked out', 'Break Start':'Break started', 'Break End':'Break ended', 'Coaching End':'Coaching ended' }[act]+' at '+hm(new Date()));
       }catch(e){ alertBox(e); }
       paint(); after && after();
     });
@@ -963,21 +979,25 @@ function shiftState(events, email){
     else if (open){ open.events.push(e); if (e.Action==='Clock Out') open=null; }
   }
   if (open && (Date.now()-open.in) > 20*3600e3) open = null; // stale forgotten clock-out
-  let onBreak=null, breakMins=0;
-  if (open){ for (const e of open.events){ if (e.Action==='Break Start') onBreak=e.ts; if (e.Action==='Break End' && onBreak){ breakMins += (e.ts-onBreak)/6e4; onBreak=null; } } }
-  return { open, onBreak, breakMins: breakMins + (onBreak?(Date.now()-onBreak)/6e4:0) };
+  let onBreak=null, breakMins=0, onCoach=null, coachMins=0;
+  if (open){ for (const e of open.events){ if (e.Action==='Break Start') onBreak=e.ts; if (e.Action==='Break End' && onBreak){ breakMins += (e.ts-onBreak)/6e4; onBreak=null; }
+    if (e.Action==='Coaching Start') onCoach=e.ts; if (e.Action==='Coaching End' && onCoach){ coachMins += (e.ts-onCoach)/6e4; onCoach=null; } } }
+  return { open, onBreak, onCoach, breakMins: breakMins + (onBreak?(Date.now()-onBreak)/6e4:0), coachMins: coachMins + (onCoach?(Date.now()-onCoach)/6e4:0) };
 }
 function summarise(events, email, date){
   const ev = events.filter(e=>e.Email===email && e['Shift Date']===date).sort((a,b)=>a.ts-b.ts);
-  const o = { ev, in:null, out:null, breakMins:0, breaks:0, openBreak:false };
-  let bs=null;
+  const o = { ev, in:null, out:null, breakMins:0, breaks:0, openBreak:false, coachMins:0, openCoach:false };
+  let bs=null, cs=null;
   for (const e of ev){
     if (e.Action==='Clock In' && !o.in) o.in=e.ts;
     if (e.Action==='Clock Out') o.out=e.ts;
     if (e.Action==='Break Start'){ bs=e.ts; o.breaks++; }
     if (e.Action==='Break End' && bs){ o.breakMins += (e.ts-bs)/6e4; bs=null; }
+    if (e.Action==='Coaching Start') cs=e.ts;
+    if (e.Action==='Coaching End' && cs){ o.coachMins += (e.ts-cs)/6e4; cs=null; }
   }
   if (bs){ o.openBreak=true; if (!o.out) o.breakMins += (Date.now()-bs)/6e4; }
+  if (cs){ o.openCoach=true; if (!o.out) o.coachMins += (Date.now()-cs)/6e4; }
   return o;
 }
 async function recordAction(action, person, shiftDate, note=''){
@@ -1046,6 +1066,8 @@ async function breakdown(){
       } else if (sm.in) r.flags.push(['info','Not on rota']);
       if (sm.breakMins>bm){ r.over=sm.breakMins-bm; r.flags.push(['bad','Break over '+fmtMins(r.over)]); }
       if (sm.openBreak && !sm.out) r.flags.push(['warn','On break now']);
+      if (sm.openCoach && !sm.out) r.flags.push(['warn','In coaching now']);
+      r.coachMins = sm.coachMins;
       if (sm.in) r.worked = ((sm.out||new Date()) - sm.in)/6e4 - sm.breakMins;
       rows.push(r);
     }
@@ -1054,11 +1076,11 @@ async function breakdown(){
   const cnt = f => rows.filter(f).length;
   $('#asum').innerHTML = `<div class="counts">${[['On rota or logged',rows.length,''],['Clocked in',cnt(r=>r.in),'ok'],['Late',cnt(r=>r.late),'bad'],['No clock-in',cnt(r=>r.flags.some(f=>f[1]==='No clock-in')),'bad'],['Break overruns',cnt(r=>r.over),'bad'],['Left early',cnt(r=>r.early),'warn']]
     .map(([l,n,c])=>`<div class="${n?c:''}"><b>${n}</b>${l}</div>`).join('')}</div>`;
-  $('#abreak').innerHTML = rows.length ? `<table><thead><tr><th>Date</th><th>Agent</th><th>Team leader</th><th>Rota shift</th><th>Clock in</th><th>Break</th><th>Clock out</th><th>Worked</th><th>Flags</th><th></th></tr></thead><tbody>
-    ${rows.map((r,i)=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(r.name)}</td><td class="muted">${esc(r.tl)}</td><td>${esc(r.shift||'—')}</td><td class="num">${hm(r.in)||'—'}</td><td class="num">${r.ev.some(e=>e.Action==='Break Start')?fmtMins(r.breakMins):'—'}</td><td class="num">${hm(r.out)||'—'}</td><td class="num">${r.worked?fmtMins(r.worked):''}</td><td>${r.flags.map(f=>`<span class="chip ${f[0]}">${esc(f[1])}</span>`).join('')||'<span class="chip ok">OK</span>'}</td><td><button class="btn sm" data-det="${i}">View</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No agents on the rota and no log-ins for these dates. Try a different date range or team.</div>`;
+  $('#abreak').innerHTML = rows.length ? `<table><thead><tr><th>Date</th><th>Agent</th><th>Team leader</th><th>Rota shift</th><th>Clock in</th><th>Break</th><th>Coaching</th><th>Clock out</th><th>Worked</th><th>Flags</th><th></th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr><td>${fmtDate(r.date)}</td><td>${esc(r.name)}</td><td class="muted">${esc(r.tl)}</td><td>${esc(r.shift||'—')}</td><td class="num">${hm(r.in)||'—'}</td><td class="num">${r.ev.some(e=>e.Action==='Break Start')?fmtMins(r.breakMins):'—'}</td><td class="num">${r.ev.some(e=>e.Action==='Coaching Start')?fmtMins(r.coachMins):'—'}</td><td class="num">${hm(r.out)||'—'}</td><td class="num">${r.worked?fmtMins(r.worked):''}</td><td>${r.flags.map(f=>`<span class="chip ${f[0]}">${esc(f[1])}</span>`).join('')||'<span class="chip ok">OK</span>'}</td><td><button class="btn sm" data-det="${i}">View</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No agents on the rota and no log-ins for these dates. Try a different date range or team.</div>`;
   document.querySelectorAll('[data-det]').forEach(b=>b.onclick=()=>attDetail(rows[+b.dataset.det]));
   $('#acsv').onclick = () => {
-    const lines = [['Date','Agent','Email','Team leader','Rota shift','Clock in','Break minutes','Clock out','Worked minutes','Flags']].concat(rows.map(r=>[r.date,r.name,r.email,r.tl,r.shift,hm(r.in),Math.round(r.breakMins),hm(r.out),Math.round(r.worked||0),r.flags.map(f=>f[1]).join('; ')]));
+    const lines = [['Date','Agent','Email','Team leader','Rota shift','Clock in','Break minutes','Coaching minutes','Clock out','Worked minutes','Flags']].concat(rows.map(r=>[r.date,r.name,r.email,r.tl,r.shift,hm(r.in),Math.round(r.breakMins),Math.round(r.coachMins||0),hm(r.out),Math.round(r.worked||0),r.flags.map(f=>f[1]).join('; ')]));
     const csv = lines.map(l=>l.map(x=>`"${String(x??'').replace(/"/g,'""')}"`).join(',')).join('\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`login-breakdown-${R.from}_${R.to}.csv`; a.click();
   };
@@ -1067,7 +1089,7 @@ function attDetail(r){
   const canFix = ['Duty Manager','General Manager'].includes(S.me.role) || (S.me.role==='Team Leader');
   modal(`<h2>${esc(r.name)} – ${fmtDate(r.date)}</h2><p class="muted">Rota: ${esc(r.shift||'not on rota')}</p>
     ${r.ev.length?`<table><tr><th>Time</th><th>Action</th><th>Recorded by</th><th>Note</th></tr>${r.ev.map(e=>`<tr><td>${hm(e.ts)}</td><td>${esc(e.Action)}</td><td class="muted">${esc(e['Recorded By']===e.Email?'self':e['Recorded By'])}</td><td>${esc(e.Note)}</td></tr>`).join('')}</table>`:'<p class="muted">No log-in events.</p>'}
-    ${canFix?`<h3 style="margin-top:16px">Add a missing entry</h3><div class="row"><select id="fxA" class="i" style="width:auto"><option>Clock In</option><option>Break Start</option><option>Break End</option><option>Clock Out</option></select><input type="time" id="fxT" class="i" style="width:auto"><input id="fxN" class="i" placeholder="Reason (required)" style="flex:1;min-width:160px"><button class="btn primary" id="fxGo">Add</button></div>`:''}
+    ${canFix?`<h3 style="margin-top:16px">Add a missing entry</h3><div class="row"><select id="fxA" class="i" style="width:auto"><option>Clock In</option><option>Break Start</option><option>Break End</option><option>Coaching Start</option><option>Coaching End</option><option>Clock Out</option></select><input type="time" id="fxT" class="i" style="width:auto"><input id="fxN" class="i" placeholder="Reason (required)" style="flex:1;min-width:160px"><button class="btn primary" id="fxGo">Add</button></div>`:''}
     <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Close</button></div>`);
   $('#fxGo') && ($('#fxGo').onclick = async()=>{
     const t=$('#fxT').value, n=$('#fxN').value.trim(); if(!t||!n) return toast('Time and reason are required');
@@ -1150,6 +1172,8 @@ async function viewLeave(){
   await reqForm(); paintMyReqs(myReqs); if (queue.length) await paintQueue(queue); await paintCal();
   if (isMgr(u)) paintHistory();
 }
+const DLBL = { 'With Manager':'With manager', 'Open':'With quality', 'Declined':'Declined by manager' };
+function dChip(s){ return `<span class="chip ${s==='Accepted'?'ok':(s==='Rejected'||s==='Declined')?'bad':'warn'}">${esc(DLBL[s]||s)}</span>`; }
 function statusChip(s){ return `<span class="chip ${s==='Approved'?'ok':(s==='Rejected'||s==='Declined')?'bad':s==='Cancelled'?'':'warn'}">${esc(s)}</span>`; }
 async function paintMyReqs(list){
   const acc=(await S.D.access()).rows; const nm=e=>(acc.find(r=>r.Email===e)||{})['Full Name']||e;
@@ -1324,14 +1348,14 @@ async function viewSchedule(){
 function wireSched(){ $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
 async function teammates(u){
   const acc=(await S.D.access()).rows;
-  return acc.filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim()) && r['Portal Role']===u.row['Portal Role'] && (u.row['Manager Email'] ? r['Manager Email']===u.row['Manager Email'] : (u.row.Team && r.Team===u.row.Team))).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
+  return acc.filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim())).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
 }
 async function swapForm(){
   const u=S.me; const mates = await teammates(u); const box=$('#swform');
-  if (!mates.length){ box.innerHTML = `<p class="muted" style="margin:0">Nobody else in your team (${esc(u.row._tl||u.row.Team||'—')}) is set up in the portal yet, so there's no one to swap with.</p>`; return; }
+  if (!mates.length){ box.innerHTML = `<p class="muted" style="margin:0">Nobody else is set up in the portal yet, so there's no one to swap with.</p>`; return; }
   const tomorrow = dkey(addDays(new Date(),1));
-  box.innerHTML = `<p class="muted" style="margin:0 0 4px">Swap with someone in your team (${esc(u.row._tl||u.row.Team||'')}). A Duty Manager approves it, then both schedules update.</p>
-    <label class="f">Teammate</label><select id="swwho" class="i">${mates.map(m=>`<option value="${m.Email}">${esc(m['Full Name'])}</option>`).join('')}</select>
+  box.innerHTML = `<p class="muted" style="margin:0 0 4px">Swap with any colleague. A Duty Manager approves it, then both schedules update.</p>
+    <label class="f">Swap with</label><select id="swwho" class="i">${mates.map(m=>`<option value="${m.Email}">${esc(m['Full Name'])}${m.Team?' · '+esc(m.Team):''}</option>`).join('')}</select>
     <div class="row"><div style="flex:1;min-width:140px"><label class="f">Your day</label><input type="date" id="swd1" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div>
     <div style="flex:1;min-width:140px"><label class="f">Their day</label><input type="date" id="swd2" class="i" value="${tomorrow}" min="${dkey(new Date())}"></div></div>
     <div id="swprev" style="margin-top:12px"></div>
@@ -1403,7 +1427,7 @@ async function qualityData(force){
   const qa = u.role==='Quality' || u.row['Quality Team']==='Yes'; const all = ['Duty Manager','General Manager','HR'].includes(u.role) || qa;
   const evals = d.evals.filter(e=> all || e.agentEmail===u.email || (u.role==='Team Leader' && team.has(e.agentEmail)));
   const ids=new Set(evals.map(e=>e.id));
-  return { evals, disputes:d.disputes.filter(x=>ids.has(x['Eval ID'])||all), canDispute:['Team Leader','Duty Manager','General Manager'].includes(u.role), canRespond: qa, quality: qa };
+  return { evals, disputes:d.disputes.filter(x=>ids.has(x['Eval ID'])||all), canDispute:u.role!=='HR', canReview:['Team Leader','Duty Manager','General Manager'].includes(u.role), canRespond: qa, quality: qa };
 }
 async function viewQuality(){
   const v=$('#view'); const u=S.me; let q;
@@ -1415,8 +1439,10 @@ async function viewQuality(){
   const avg = list => list.length ? list.reduce((a,e)=>a+e.score,0)/list.length : null;
   const mgr = isMgr(u) || q.quality;
   const agents = {}; inMonth.forEach(e=>{ const k=e.agentEmail||e.agent; (agents[k]=agents[k]||{ name:e.agentFull, tl:e.tl, list:[] }).list.push(e); });
-  const agentRows = Object.entries(agents).map(([k,a])=>({ key:k, name:a.name, tl:a.tl, n:a.list.length, avg:avg(a.list), errors:a.list.reduce((s,e)=>s+e.errors.length,0), last:a.list.map(e=>e.date).sort().pop(), open:a.list.filter(e=>(openBy[e.id]||[]).some(d=>d.Status==='Open')).length })).sort((a,b)=>(a.avg??2)-(b.avg??2));
+  const agentRows = Object.entries(agents).map(([k,a])=>({ key:k, name:a.name, tl:a.tl, n:a.list.length, avg:avg(a.list), errors:a.list.reduce((s,e)=>s+e.errors.length,0), last:a.list.map(e=>e.date).sort().pop(), open:a.list.filter(e=>(openBy[e.id]||[]).some(d=>['Open','With Manager'].includes(d.Status))).length })).sort((a,b)=>(a.avg??2)-(b.avg??2));
   const openDisputes = q.disputes.filter(d=>d.Status==='Open');
+  const withMgr = q.disputes.filter(d=>d.Status==='With Manager');
+  const toReview = q.canReview ? withMgr.filter(d=>d['Agent Email']!==u.email && (d['Manager Email']===u.email || ['Duty Manager','General Manager'].includes(u.role))) : [];
   const below = agentRows.filter(a=>a.avg!=null && a.avg<0.8).length;
   const tls = [...new Set(inMonth.map(e=>e.tl).filter(Boolean))].sort();
   v.innerHTML = `
@@ -1427,8 +1453,9 @@ async function viewQuality(){
             : `<div class="m"><h3>My average</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(avg(inMonth))]||'inherit'}">${qPct(avg(inMonth))}</div><p>${esc(F.month)}</p></div>
                <div class="m"><h3>Lowest score</h3><div class="stat">${inMonth.length?qPct(Math.min(...inMonth.map(e=>e.score))):'—'}</div><p>this month</p></div>`}
       <div class="m"><h3>Evaluations</h3><div class="stat">${inMonth.length}</div><p>${inMonth.filter(e=>e.score>=1).length} perfect chats</p></div>
-      <div class="m"><h3>Open disputes</h3><div class="stat" style="${openDisputes.length?'color:var(--warn)':''}">${openDisputes.length}</div><p>${q.canRespond?'waiting for the quality team':'waiting for a decision'}</p></div>
+      <div class="m"><h3>Open disputes</h3><div class="stat" style="${(openDisputes.length+withMgr.length)?'color:var(--warn)':''}">${q.canRespond?openDisputes.length:openDisputes.length+withMgr.length}</div><p>${q.canRespond?'waiting for the quality team':withMgr.length?withMgr.length+' with a manager, '+openDisputes.length+' with quality':'waiting for the quality team'}</p></div>
     </div>
+    ${toReview.length ? `<div class="card sec"><h2>Disputes waiting for your review <span class="muted" style="font-weight:500">${toReview.length}</span></h2><p class="muted" style="margin:-4px 0 10px;font-size:13.5px">Approve to send it to the quality team for reassessment, or decline to close it with a note to the agent.</p><div id="qmr"></div></div>`:''}
     ${q.canRespond && openDisputes.length ? `<div class="card sec"><h2>Disputes to review <span class="muted" style="font-weight:500">${openDisputes.length}</span></h2><div id="qdq"></div></div>`:''}
     ${mgr ? `<div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Agents</h2><span class="spacer"></span>${tls.length>1?`<select id="qtl" class="i" style="width:auto"><option value="">All team leaders</option>${tls.map(t=>`<option ${t===F.tl?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}</div>
       <div class="tablewrap" style="max-height:420px"><table><thead><tr><th>Agent</th><th>Team leader</th><th>Chats</th><th>Average</th><th>Errors</th><th>Last evaluated</th><th>Disputes</th></tr></thead><tbody>
@@ -1439,11 +1466,18 @@ async function viewQuality(){
   const paintList = () => {
     const s=norm(F.q); const list = inMonth.filter(e=>(!F.who||(e.agentEmail||e.agent)===F.who) && (!F.tl||e.tl===F.tl) && (!s || norm(e.agentFull+' '+e.client).includes(s))).sort((a,b)=>a.date<b.date?1:-1);
     $('#qlist').innerHTML = list.length ? `<div class="tablewrap" style="max-height:560px"><table><thead><tr><th>Chat date</th>${mgr?'<th>Agent</th>':''}<th>Client</th><th>Score</th><th>Errors</th><th>Inquiry</th><th>Dispute</th><th></th></tr></thead><tbody>${list.map(e=>{ const ds=openBy[e.id]||[]; const last=ds[ds.length-1];
-      return `<tr><td>${e.date?fmtDate(e.date):'—'}</td>${mgr?`<td>${esc(e.agentFull)}</td>`:''}<td class="muted">${esc(e.client)}</td><td><span class="chip ${qCls(e.score)}">${qPct(e.score)}</span></td><td>${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}" title="${esc(x.type)}">${esc(x.code)}</span>`).join('')||'<span class="muted">None</span>'}</td><td class="muted">${esc(e.inquiry)}</td><td>${last?statusChip(last.Status):''}</td><td><button class="btn sm" data-ev="${esc(e.id)}">View</button></td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${mgr?'No evaluations match.':'You have no evaluations this month.'}</div>`;
+      return `<tr><td>${e.date?fmtDate(e.date):'—'}</td>${mgr?`<td>${esc(e.agentFull)}</td>`:''}<td class="muted">${esc(e.client)}</td><td><span class="chip ${qCls(e.score)}">${qPct(e.score)}</span></td><td>${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}" title="${esc(x.type)}">${esc(x.code)}</span>`).join('')||'<span class="muted">None</span>'}</td><td class="muted">${esc(e.inquiry)}</td><td>${last?dChip(last.Status):''}</td><td><button class="btn sm" data-ev="${esc(e.id)}">View</button></td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${mgr?'No evaluations match.':'You have no evaluations this month.'}</div>`;
     document.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>evalDetail(q, q.evals.find(e=>e.id===b.dataset.ev), openBy));
   };
   paintList();
-  if ($('#qdisp')) $('#qdisp').innerHTML = `<div class="tablewrap" style="max-height:380px"><table><thead><tr><th>Raised</th><th>Agent</th><th>Chat</th><th>Score</th><th>Reason</th><th>Status</th><th>Quality response</th></tr></thead><tbody>${q.disputes.slice().reverse().map(d=>`<tr><td>${fmtDate(parseTs(d['Raised At']))}</td><td>${esc(d['Agent Name'])}</td><td>${d['Chat Date']?fmtDate(d['Chat Date']):''}</td><td>${qPct(+d.Score)}</td><td style="max-width:320px">${esc(d.Reason)}</td><td>${statusChip(d.Status)}</td><td class="muted" style="max-width:260px">${esc(d.Response||'')}</td></tr>`).join('')}</tbody></table></div>`;
+  if ($('#qdisp')) $('#qdisp').innerHTML = `<div class="tablewrap" style="max-height:380px"><table><thead><tr><th>Raised</th><th>Agent</th><th>Chat</th><th>Score</th><th>Reason</th><th>Status</th><th>Response</th></tr></thead><tbody>${q.disputes.slice().reverse().map(d=>`<tr><td>${fmtDate(parseTs(d['Raised At']))}</td><td>${esc(d['Agent Name'])}</td><td>${d['Chat Date']?fmtDate(d['Chat Date']):''}</td><td>${qPct(+d.Score)}</td><td style="max-width:320px">${esc(d.Reason)}</td><td>${dChip(d.Status)}</td><td class="muted" style="max-width:260px">${esc(d.Response||d['Manager Note']||'')}</td></tr>`).join('')}</tbody></table></div>`;
+  if ($('#qmr')) { $('#qmr').innerHTML = toReview.map(d=>{ const e=q.evals.find(x=>x.id===d['Eval ID']); return `<div class="req"><div class="row"><b style="font-weight:600">${esc(d['Agent Name'])}</b><span class="chip ${qCls(+d.Score)}">${qPct(+d.Score)}</span><span class="muted">chat ${d['Chat Date']?fmtDate(d['Chat Date']):''}${e?` · ${esc(e.client)}`:''}</span><span class="spacer"></span><span class="muted" style="font-size:13px">raised ${fmtDate(parseTs(d['Raised At']))}</span></div>
+      <p style="margin:8px 0">${esc(d.Reason)}</p>${e&&e.findings?`<p class="muted" style="margin:0 0 8px;font-size:13.5px">Evaluation findings: ${esc(e.findings)}</p>`:''}
+      <div class="row"><input class="i" style="flex:1;min-width:180px" placeholder="Note to the agent (optional)" id="qn_${d.ID}">${e?`<button class="btn sm" data-ev2="${esc(e.id)}">View chat</button>`:''}<button class="btn primary" data-mr="${d.ID}" data-ok="1">Approve – send to quality</button><button class="btn danger" data-mr="${d.ID}" data-ok="0">Decline</button></div></div>`; }).join('');
+    document.querySelectorAll('[data-ev2]').forEach(b=>b.onclick=()=>evalDetail(q, q.evals.find(e=>e.id===b.dataset.ev2), openBy));
+    document.querySelectorAll('[data-mr]').forEach(b=>b.onclick=async()=>{ b.disabled=true; const id=b.dataset.mr, ok=b.dataset.ok==='1';
+      try{ if (S.D instanceof ApiData) await S.D.call('POST','disputereview',{ id, ok, note:$('#qn_'+id).value.trim() }); else { const d=S._dq.disputes.find(x=>x.ID===id); Object.assign(d,{Status:ok?'Open':'Declined','Manager Note':$('#qn_'+id).value.trim()}); }
+        toast(ok?'Approved – sent to the quality team':'Dispute declined'); await qualityData(true); viewQuality(); }catch(e){ alertBox(e); b.disabled=false; } }); }
   if ($('#qdq')) { $('#qdq').innerHTML = openDisputes.map(d=>{ const e=q.evals.find(x=>x.id===d['Eval ID']); return `<div class="req"><div class="row"><b style="font-weight:600">${esc(d['Agent Name'])}</b><span class="chip ${qCls(+d.Score)}">${qPct(+d.Score)}</span><span class="muted">chat ${d['Chat Date']?fmtDate(d['Chat Date']):''}${e?` · ${esc(e.client)}`:''}</span><span class="spacer"></span><span class="muted" style="font-size:13px">raised ${fmtDate(parseTs(d['Raised At']))}</span></div>
       <p style="margin:8px 0">${esc(d.Reason)}</p>${e&&e.findings?`<p class="muted" style="margin:0 0 8px;font-size:13.5px">Original findings: ${esc(e.findings)}</p>`:''}
       <div class="row"><input class="i" style="flex:1;min-width:180px" placeholder="Response to the team leader" id="qr_${d.ID}">${e?`<button class="btn sm" data-ev2="${esc(e.id)}">View chat</button>`:''}<button class="btn primary" data-qa="${d.ID}" data-dec="Accepted">Accept</button><button class="btn danger" data-qa="${d.ID}" data-dec="Rejected">Reject</button></div></div>`; }).join('');
@@ -1458,7 +1492,7 @@ async function viewQuality(){
   document.querySelectorAll('[data-agent]').forEach(tr=>tr.onclick=()=>{ F.who=tr.dataset.agent; viewQuality(); setTimeout(()=>$('#qlist')&&$('#qlist').scrollIntoView({behavior:'smooth'}),50); });
 }
 function evalDetail(q, e, openBy){
-  if (!e) return; const ds=openBy[e.id]||[]; const open=ds.find(d=>d.Status==='Open');
+  if (!e) return; const ds=openBy[e.id]||[]; const open=ds.find(d=>['Open','With Manager'].includes(d.Status)); const own=e.agentEmail===S.me.email;
   const m = Object.entries(e.metrics||{});
   modal(`<div class="row"><h2 style="margin:0">${esc(e.agentFull)}</h2><span class="chip ${qCls(e.score)}" style="font-size:15px">${qPct(e.score)}</span></div>
     <p class="muted" style="margin:6px 0 14px">${e.date?fmtDate(e.date):''} · ${esc(e.client)} · ${esc(e.inquiry)} · ${esc(e.month)}${e.link?` · <a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--gold)">Open chat</a>`:''}</p>
@@ -1466,13 +1500,13 @@ function evalDetail(q, e, openBy){
     <p><b>Issue resolved:</b> ${esc(e.resolved||'—')}${e.irresolution&&e.irresolution!=='N/A'?` (${esc(e.irresolution)})`:''}</p>
     ${e.errors.length?`<p><b>Errors:</b> ${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}">${esc(x.code)}: ${esc(x.type||'—')}</span>`).join('')}</p>`:'<p><b>Errors:</b> none</p>'}
     <p><b>Findings:</b> ${esc(e.findings||'—')}</p><p><b>Action:</b> ${esc(e.actions||'—')}</p>
-    ${ds.length?`<h3 style="margin-top:16px">Disputes</h3>${ds.map(d=>`<div class="req" style="padding:10px 12px"><div class="row">${statusChip(d.Status)}<span class="muted" style="font-size:13px">${fmtDate(parseTs(d['Raised At']))}</span></div><p style="margin:6px 0 0">${esc(d.Reason)}</p>${d.Response?`<p class="muted" style="margin:6px 0 0">Quality: ${esc(d.Response)}</p>`:''}</div>`).join('')}`:''}
-    ${q.canDispute && !open && e.agentEmail!==S.me.email ? `<h3 style="margin-top:16px">Raise a dispute</h3><textarea id="dreason" class="i" rows="3" placeholder="Explain what the evaluation got wrong. The quality team will see it in the portal."></textarea><div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="dgo">Send dispute</button></div>`
+    ${ds.length?`<h3 style="margin-top:16px">Disputes</h3>${ds.map(d=>`<div class="req" style="padding:10px 12px"><div class="row">${dChip(d.Status)}<span class="muted" style="font-size:13px">${fmtDate(parseTs(d['Raised At']))}</span></div><p style="margin:6px 0 0">${esc(d.Reason)}</p>${d['Manager Note']?`<p class="muted" style="margin:6px 0 0">Manager: ${esc(d['Manager Note'])}</p>`:''}${d.Response?`<p class="muted" style="margin:6px 0 0">Quality: ${esc(d.Response)}</p>`:''}</div>`).join('')}`:''}
+    ${q.canDispute && !open && (own || isMgr(S.me)) ? `<h3 style="margin-top:16px">Raise a dispute</h3>${own?'<p class="muted" style="margin:0 0 8px;font-size:13.5px">Your dispute goes to your direct manager first. If they approve it, the quality team reassesses the chat.</p>':''}<textarea id="dreason" class="i" rows="3" placeholder="Explain what the evaluation got wrong."></textarea><div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="dgo">Send dispute</button></div>`
       : `<div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn" data-close>Close</button></div>`}`);
   $('#dgo') && ($('#dgo').onclick=async()=>{ const reason=$('#dreason').value.trim(); if (reason.length<5) return toast('Please explain the dispute'); $('#dgo').disabled=true;
     try{ if (S.D instanceof ApiData) await S.D.call('POST','dispute',{ evalId:e.id, reason });
-      else S._dq.disputes.push({ ID:uid('D'), 'Raised At':new Date().toISOString(), 'Eval ID':e.id, 'Agent Email':e.agentEmail, 'Agent Name':e.agentFull, 'Chat Date':e.date, Score:e.score, 'Raised By':S.me.email, Reason:reason, Status:'Open' });
-      closeModal(); toast('Dispute sent to the quality team'); await qualityData(true); viewQuality(); }catch(err){ alertBox(err); } });
+      else S._dq.disputes.push({ ID:uid('D'), 'Raised At':new Date().toISOString(), 'Eval ID':e.id, 'Agent Email':e.agentEmail, 'Agent Name':e.agentFull, 'Chat Date':e.date, Score:e.score, 'Raised By':S.me.email, Reason:reason, Status:own?'With Manager':'Open', 'Manager Email':S.me.row['Manager Email']||'' });
+      closeModal(); toast(own?'Dispute sent to your manager':'Dispute sent to the quality team'); await qualityData(true); viewQuality(); }catch(err){ alertBox(err); } });
 }
 
 /* ============================ Home ============================ */
@@ -1512,6 +1546,53 @@ async function kbData(force){
   if (force || !S._kb || Date.now()-S._kbAt > 300e3){ S._kb = await S.D.call('GET','kb'); S._kbAt = Date.now(); }
   return S._kb;
 }
+/* ---- live update notifications (whistle) ---- */
+const UPDATE_POLL_MS = 120e3;
+let _ac=null;
+function audioCtx(){ try { const AC=window.AudioContext||window.webkitAudioContext; if (!AC) return null; _ac=_ac||new AC(); if (_ac.state==='suspended') _ac.resume(); return _ac; } catch(e){ return null; } }
+document.addEventListener('pointerdown', ()=>audioCtx(), { once:true });
+document.addEventListener('keydown', ()=>audioCtx(), { once:true });
+function whistle(){
+  const ac=audioCtx(); if (!ac) return;
+  const blast = t => { const o=ac.createOscillator(), g=ac.createGain(), l=ac.createOscillator(), lg=ac.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(1900,t); o.frequency.exponentialRampToValueAtTime(3100,t+.16); o.frequency.exponentialRampToValueAtTime(2500,t+.42);
+    l.frequency.value=42; lg.gain.value=110; l.connect(lg); lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(.28,t+.03); g.gain.setValueAtTime(.28,t+.34); g.gain.exponentialRampToValueAtTime(.001,t+.5);
+    o.connect(g); g.connect(ac.destination); o.start(t); l.start(t); o.stop(t+.52); l.stop(t+.52); };
+  try { blast(ac.currentTime+.02); blast(ac.currentTime+.62); } catch(e){}
+}
+function setUpdBadge(n){
+  S.upUnread=n; const btn=document.querySelector('[data-tab="kb"]'); if (!btn) return;
+  let b=btn.querySelector('.badge'); if (!n){ b&&b.remove(); } else { if (!b){ b=document.createElement('span'); b.className='badge'; b.title='New updates'; btn.appendChild(b); } b.textContent=n; }
+  document.title = (n?`(${n}) `:'') + 'GTO Operations portal';
+}
+function updSig(u){ return [u.ID,u['Edited At']||'',u.Pinned||'',u.Active||''].join('|'); }
+function showUpdateToast(fresh){
+  document.querySelectorAll('.upnote').forEach(x=>x.remove());
+  const f=fresh[0]; const d=document.createElement('div'); d.className='upnote'; d.setAttribute('role','alert');
+  d.innerHTML=`<div class="ic">🔔</div><div class="tx"><b>${fresh.length===1?'New update':fresh.length+' new updates'}</b><span>${esc(f.Title)}${fresh.length>1?' and more':''}</span><small>${esc(f['Posted By Name']||'')}</small></div><button class="btn sm primary" data-open>Read</button><button class="x" aria-label="Dismiss">×</button>`;
+  d.querySelector('[data-open]').onclick=()=>{ d.remove(); S.tab='kb'; render(); };
+  d.querySelector('.x').onclick=()=>d.remove();
+  document.body.appendChild(d); setTimeout(()=>d.remove(), 30000);
+  try { if (window.Notification && Notification.permission==='granted' && document.hidden) new Notification('GTO – '+(fresh.length===1?'new update':fresh.length+' new updates'), { body:f.Title }); } catch(e){}
+}
+function handleUpdates(list){
+  const me=S.me; const sig=new Map(list.map(u=>[u.ID,updSig(u)])); const prev=S.upSig;
+  if (S._kb) { S._kb.updates=list; S._kbAt=Date.now(); }
+  S.upSig=sig; const seen=kbSeen();
+  setUpdBadge(S.tab==='kb' ? 0 : list.filter(u=>String(u['Posted At'])>seen && u['Posted By']!==me.email).length);
+  if (!prev) return;
+  const fresh=list.filter(u=>!prev.has(u.ID) && u['Posted By']!==me.email);
+  const changed=fresh.length || [...sig].some(([id,v])=>prev.get(id)!==v) || [...prev.keys()].some(id=>!sig.has(id));
+  if (fresh.length){ whistle(); showUpdateToast(fresh); }
+  if (changed && S.tab==='kb' && !document.querySelector('.modal')) viewKb();
+}
+function startUpdatePoll(){
+  if (S._upPoll || DEMO || !(S.D instanceof ApiData)) return; S._upPoll=true;
+  const check = async () => { try { const r=await S.D.call('GET','updates'); handleUpdates(r.updates||[]); } catch(e){} };
+  check(); setInterval(check, UPDATE_POLL_MS);
+  document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) check(); });
+}
 function kbSeen(){ try { return localStorage.getItem('gto.kbSeen')||''; } catch(e){ return ''; } }
 function kbMarkSeen(){ try { localStorage.setItem('gto.kbSeen', new Date().toISOString()); } catch(e){} }
 
@@ -1519,14 +1600,13 @@ async function viewKb(){
   const myRender = S.renderId; const v=$('#view');
   let kb; try { kb = await kbData(); } catch(e){ if (S.renderId===myRender) v.innerHTML = `<div class="alert bad">The knowledge base couldn't be loaded: ${esc(e.message)}</div>`; return; }
   if (S.renderId !== myRender) return;
-  const F = S.kbf = S.kbf || { q:'', cat:'', status:'', cov:-1, sort:'new' };
-  const seenBefore = kbSeen(); kbMarkSeen();
+  const F = S.kbf = S.kbf || { q:'', cat:'', status:'', cov:-1, sort:'new' }; F.status='';
+  const seenBefore = kbSeen(); kbMarkSeen(); setUpdBadge(0);
   const counts = c => kb.items.filter(i=>!c||i.cat===c).length;
   v.innerHTML = `
     <section class="kb-hero">
       <div class="kb-search">${KBI.search}<input id="kbq" type="search" placeholder="Search offers, products, vouchers, rules… e.g. “Magic Pass expiry” or “flight club minimum”" value="${esc(F.q)}" autocomplete="off" aria-label="Search the knowledge base"></div>
-      <div class="kb-row" role="group" aria-label="Category"><span class="lbl">Type</span>${['',...kb.cats].map(c=>`<button class="pill ${F.cat===c?'on':''}" data-cat="${esc(c)}">${c?esc(c==='Posh Saver'?c:c+'s'):'All'} <span class="n">${counts(c)}</span></button>`).join('')}
-        <span class="lbl" style="margin-left:10px">Status</span>${[['','Any'],['live','Available now'],['Ended','Sale ended']].map(([k,l])=>`<button class="pill ${F.status===k?'on':''}" data-st="${k}">${l}</button>`).join('')}</div>
+      <div class="kb-row" role="group" aria-label="Category"><span class="lbl">Type</span>${['',...kb.cats].map(c=>`<button class="pill ${F.cat===c?'on':''}" data-cat="${esc(c)}">${c?esc(c==='Posh Saver'?c:c+'s'):'All'} <span class="n">${counts(c)}</span></button>`).join('')}</div>
       <div class="kb-row" role="group" aria-label="Covers"><span class="lbl">Covers</span>${COV_SHORT.map((l,i)=>`<button class="pill ${F.cov===i?'on':''}" data-cov="${i}">${KBI.cov[i]}${l}</button>`).join('')}</div>
     </section>
     <div class="kb-layout">
@@ -1558,20 +1638,20 @@ async function viewKb(){
   const paintUps = () => {
     const ups = kb.updates||[]; const me=S.me; const boss=['Duty Manager','General Manager'].includes(me.role)||me.admin;
     $('#kbups').innerHTML = ups.length ? ups.slice(0,25).map(u=>{ const t=parseTs(u['Posted At']); const fresh = !seenBefore || String(u['Posted At'])>seenBefore; return `<div class="kb-up" data-up="${esc(u.ID)}"><h4>${/^y/i.test(u.Pinned)?`<span title="Pinned" style="color:var(--gold)">${KBI.pin.replace('<svg','<svg style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-2px"')}</span>`:''}${fresh&&(Date.now()-t)<7*864e5?'<span class="newtag">NEW</span>':''}<span>${esc(u.Title)}</span></h4>
-      <div class="body">${esc(u.Body)}</div><div class="by"><span class="chip" style="margin:0">${esc(u.Category||'General')}</span>${esc(u['Posted By Name']||'')} · ${fmtDate(t)}${String(u.Body).length>180?'<button data-more>Show more</button>':''}${(u['Posted By']===me.email||boss)&&kb.canPost?`<button data-pin="${esc(u.ID)}" data-v="${/^y/i.test(u.Pinned)?0:1}">${/^y/i.test(u.Pinned)?'Unpin':'Pin'}</button><button data-rm="${esc(u.ID)}">Remove</button>`:''}</div></div>`; }).join('')
+      <div class="body">${esc(u.Body)}</div><div class="by"><span class="chip" style="margin:0">${esc(u.Category||'General')}</span>${esc(u['Posted By Name']||'')} · ${fmtDate(t)}${String(u.Body).length>180?'<button data-more>Show more</button>':''}${(u['Posted By']===me.email||boss)&&kb.canPost?`<button data-pin="${esc(u.ID)}" data-v="${/^y/i.test(u.Pinned)?0:1}">${/^y/i.test(u.Pinned)?'Unpin':'Pin'}</button><button data-ed="${esc(u.ID)}">Edit</button><button data-rm="${esc(u.ID)}">Delete</button>`:''}${u['Edited At']?`<span title="Edited ${esc(fmtDate(parseTs(u['Edited At'])))}">· edited</span>`:''}</div></div>`; }).join('')
       : `<p class="muted" style="margin:6px 0 0;font-size:14px">No updates yet.${kb.canPost?' Post the first one: new offers, process changes or reminders for the team.':''}</p>`;
     document.querySelectorAll('[data-more]').forEach(b=>b.onclick=()=>{ const d=b.closest('.kb-up'); d.classList.toggle('open'); b.textContent=d.classList.contains('open')?'Show less':'Show more'; });
     const act = async (body,msg) => { try { if (S.D instanceof ApiData) await S.D.call('POST','update',body); else { const u=kb.updates.find(x=>x.ID===body.id); if (body.remove) kb.updates=kb.updates.filter(x=>x!==u); else u.Pinned=body.pin?'Yes':'No'; } toast(msg); await kbData(true); viewKb(); } catch(e){ alertBox(e); } };
     document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=()=>act({ id:b.dataset.pin, pin:b.dataset.v==='1' }, b.dataset.v==='1'?'Pinned':'Unpinned'));
-    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ if (b.dataset.sure) return act({ id:b.dataset.rm, remove:true },'Update removed'); b.dataset.sure=1; b.textContent='Click again to remove'; b.style.color='var(--bad)'; });
+    document.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>kbPostForm((kb.updates||[]).find(x=>x.ID===b.dataset.ed)));
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ if (b.dataset.sure) return act({ id:b.dataset.rm, remove:true },'Update deleted'); b.dataset.sure=1; b.textContent='Click again to delete'; b.style.color='var(--bad)'; });
   };
   let tmr; $('#kbq').oninput=e=>{ F.q=e.target.value; clearTimeout(tmr); tmr=setTimeout(paint,120); };
   $('#kbq').onkeydown=e=>{ if (e.key==='Enter' && !$('#kbgrid .kb-card') && F.q.trim()) aiOpen(F.q); };
   document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ F.cat=b.dataset.cat; viewKb(); });
-  document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ F.status=b.dataset.st; viewKb(); });
   document.querySelectorAll('[data-cov]').forEach(b=>b.onclick=()=>{ const k=+b.dataset.cov; F.cov=F.cov===k?-1:k; viewKb(); });
   $('#kbsort').onchange=e=>{ F.sort=e.target.value; paint(); };
-  $('#kbpost') && ($('#kbpost').onclick=kbPostForm);
+  $('#kbpost') && ($('#kbpost').onclick=()=>kbPostForm());
   $('#aifab').onclick=()=>aiOpen();
   paint(); paintUps();
   if (kb.seesLog && S.D instanceof ApiData) S.D.call('GET','asklog').then(r=>{ const el=$('#kblog'); if (!el || S.renderId!==myRender) return; el.innerHTML = r.rows.length ? r.rows.slice(0,15).map(x=>`<div class="kb-up" style="padding:9px 0"><div style="color:var(--ink);font-size:13.5px;unicode-bidi:plaintext">${esc(x.Question)}</div><div class="by">${esc(x.Name||x.Email)} · ${fmtDate(parseTs(x['Asked At']))} · ${esc(x['Answer Type'])}</div></div>`).join('') : 'None so far.'; }).catch(()=>{ const el=$('#kblog'); if (el) el.textContent='Not available.'; });
@@ -1604,20 +1684,21 @@ function kbDetail(id){
   m.onclick=e=>{ if (e.target===m || e.target.closest('[data-close]')) m.remove(); };
   m.querySelector('#kbaskthis').onclick=()=>{ m.remove(); aiOpen(`Tell me the key points of "${it.name}" that I should explain to a member.`, true); };
 }
-function kbPostForm(){
-  const m=document.createElement('div'); m.className='modal'; m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-label="Post an update"><h2>Post an update</h2><p class="muted" style="margin-top:-4px">Everyone in the portal sees it on the Knowledge tab, and GTO Assist uses it when answering.</p>
-    <label class="f">Title</label><input id="upt" class="i" maxlength="140" placeholder="e.g. New Holiday Pass rolled out today">
-    <label class="f">Category</label><select id="upc" class="i">${['New offer','Offer change','Process','System','Reminder','General'].map(c=>`<option>${c}</option>`).join('')}</select>
-    <label class="f">Update</label><textarea id="upb" class="i" rows="6" maxlength="4000" placeholder="What agents need to know"></textarea>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="upp"> Pin to the top</label>
-    <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="upgo">Post</button></div></div>`;
+function kbPostForm(ed){
+  const m=document.createElement('div'); m.className='modal'; m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-label="${ed?'Edit update':'Post an update'}"><h2>${ed?'Edit update':'Post an update'}</h2><p class="muted" style="margin-top:-4px">${ed?'Changes show for everyone straight away.':'Everyone in the portal is notified with a whistle, and GTO Assist uses it when answering.'}</p>
+    <label class="f">Title</label><input id="upt" class="i" maxlength="140" placeholder="e.g. New Holiday Pass rolled out today" value="${ed?esc(ed.Title):''}">
+    <label class="f">Category</label><select id="upc" class="i">${['New offer','Offer change','Process','System','Reminder','General'].map(c=>`<option ${ed&&ed.Category===c?'selected':''}>${c}</option>`).join('')}</select>
+    <label class="f">Update</label><textarea id="upb" class="i" rows="6" maxlength="4000" placeholder="What agents need to know">${ed?esc(ed.Body):''}</textarea>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="upp" ${ed&&/^y/i.test(ed.Pinned)?'checked':''}> Pin to the top</label>
+    <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="upgo">${ed?'Save changes':'Post'}</button></div></div>`;
   document.body.appendChild(m); m.onclick=e=>{ if (e.target===m || e.target.closest('[data-close]')) m.remove(); };
   $('#upt').focus();
   $('#upgo').onclick=async()=>{ const body={ title:$('#upt').value.trim(), body:$('#upb').value.trim(), category:$('#upc').value, pin:$('#upp').checked };
     if (body.title.length<3||body.body.length<3) return toast('Add a title and the update');
     $('#upgo').disabled=true;
-    try { if (S.D instanceof ApiData) await S.D.call('POST','update',body); else S._kb.updates.unshift({ ID:uid('U'), 'Posted At':new Date().toISOString(), 'Posted By':S.me.email, 'Posted By Name':S.me.name, Title:body.title, Body:body.body, Category:body.category, Pinned:body.pin?'Yes':'No', Active:'Yes' });
-      m.remove(); toast('Update posted'); await kbData(true); viewKb(); } catch(e){ alertBox(e); $('#upgo').disabled=false; } };
+    try { if (ed){ if (S.D instanceof ApiData) await S.D.call('POST','update',{ ...body, id:ed.ID }); else Object.assign(S._kb.updates.find(x=>x.ID===ed.ID), { Title:body.title, Body:body.body, Category:body.category, Pinned:body.pin?'Yes':'No' }); }
+      else if (S.D instanceof ApiData) await S.D.call('POST','update',body); else S._kb.updates.unshift({ ID:uid('U'), 'Posted At':new Date().toISOString(), 'Posted By':S.me.email, 'Posted By Name':S.me.name, Title:body.title, Body:body.body, Category:body.category, Pinned:body.pin?'Yes':'No', Active:'Yes' });
+      m.remove(); toast(ed?'Update saved':'Update posted'); await kbData(true); viewKb(); } catch(e){ alertBox(e); $('#upgo').disabled=false; } };
 }
 
 /* ---- GTO Assist chat ---- */
@@ -1687,12 +1768,20 @@ async function viewHome(){
   const tk = dkey(new Date());
   const qaUser = u.role==='Quality' || u.row['Quality Team']==='Yes';
   let qNote = '';
-  if (!isMgr(u) || qaUser){ try { const q = await qualityData(); const open = q.disputes.filter(d=>d.Status==='Open');
-    if (qaUser && open.length) qNote = `<div class="alert" data-go="quality" style="cursor:pointer"><b>${open.length} quality ${open.length===1?'dispute is':'disputes are'} waiting for review.</b> Open Quality to accept or reject.</div>`;
-    else if (!qaUser){ const mine = q.disputes.filter(d=>d['Agent Email']===u.email); const o = mine.filter(d=>d.Status==='Open').length; const done = mine.filter(d=>d.Status!=='Open' && (Date.now()-parseTs(d['Responded At']))<14*864e5);
-      if (o) qNote = `<div class="alert" data-go="quality" style="cursor:pointer"><b>Your team leader raised ${o===1?'a dispute':o+' disputes'} about your quality ${o===1?'evaluation':'evaluations'}.</b> The quality team will review it. Open Quality to see the details.</div>`;
-      else if (done.length) qNote = `<div class="alert" data-go="quality" style="cursor:pointer"><b>A dispute about your quality evaluation was ${esc(done[done.length-1].Status.toLowerCase())}.</b> Open Quality to see the response.</div>`; }
-  } catch(e){} }
+  try { const q = await qualityData(); const open = q.disputes.filter(d=>d.Status==='Open');
+    const toReview = ['Team Leader','Duty Manager','General Manager'].includes(u.role) ? q.disputes.filter(d=>d.Status==='With Manager' && d['Agent Email']!==u.email && (d['Manager Email']===u.email || ['Duty Manager','General Manager'].includes(u.role))) : [];
+    const alertBtn = (t,sub) => `<div class="alert" data-go="quality" style="cursor:pointer"><b>${t}</b> ${sub}</div>`;
+    if (toReview.length) qNote += alertBtn(`${toReview.length} ${toReview.length===1?'dispute is':'disputes are'} waiting for your review.`, 'Open Quality to approve or decline.');
+    if (qaUser && open.length) qNote += alertBtn(`${open.length} quality ${open.length===1?'dispute is':'disputes are'} waiting for reassessment.`, 'Open Quality to accept or reject.');
+    const mine = q.disputes.filter(d=>d['Agent Email']===u.email && d['Raised By']===u.email);
+    const wm = mine.filter(d=>d.Status==='With Manager').length, wq = mine.filter(d=>d.Status==='Open').length;
+    const done = mine.filter(d=>['Accepted','Rejected','Declined'].includes(d.Status) && (Date.now()-parseTs(d['Responded At']||d['Reviewed At']||d['Raised At']))<14*864e5);
+    if (wm) qNote += alertBtn(`Your dispute is with your manager.`, 'They will approve it for the quality team or decline it.');
+    if (wq) qNote += alertBtn(`Your dispute was approved by your manager.`, 'The quality team is reassessing it.');
+    if (done.length){ const l=done[done.length-1]; qNote += alertBtn(`Your quality dispute was ${esc(l.Status==='Declined'?'declined by your manager':l.Status.toLowerCase())}.`, 'Open Quality to see the response.'); }
+    const byTl = q.disputes.filter(d=>d['Agent Email']===u.email && d['Raised By']!==u.email && d.Status==='Open').length;
+    if (byTl) qNote += alertBtn(`Your team leader raised ${byTl===1?'a dispute':byTl+' disputes'} about your quality ${byTl===1?'evaluation':'evaluations'}.`, 'The quality team will review it.');
+  } catch(e){}
   if (S.renderId !== myRender) return;
   v.innerHTML = `
     ${qNote}
@@ -1711,7 +1800,7 @@ async function viewHome(){
   if (S.renderId === myRender) await mountBoard($('#board'));
   kbData().then(kb=>{ if (S.renderId !== myRender) return; const seen=kbSeen(); const fresh=(kb.updates||[]).filter(u=>String(u['Posted At'])>seen && Date.now()-parseTs(u['Posted At'])<7*864e5);
     if (!fresh.length) return; const d=document.createElement('div'); d.className='alert info'; d.style.cursor='pointer';
-    d.innerHTML=`<b>${fresh.length===1?'New update':fresh.length+' new updates'}:</b> ${esc(fresh[0].Title)}${fresh.length>1?' and more':''}. Open the Knowledge tab to read ${fresh.length===1?'it':'them'}.`;
+    d.innerHTML=`<b>${fresh.length===1?'New update':fresh.length+' new updates'}:</b> ${esc(fresh[0].Title)}${fresh.length>1?' and more':''}. Open the Updates tab to read ${fresh.length===1?'it':'them'}.`;
     d.onclick=()=>{ S.tab='kb'; render(); }; $('#view').prepend(d); }).catch(()=>{});
 }
 
