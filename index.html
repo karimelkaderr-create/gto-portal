@@ -211,6 +211,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 
 .up-act{display:flex;gap:8px;margin-top:10px}
 .kb-act{margin-left:auto;display:flex;gap:6px}
+.kb-card .foot{flex-wrap:wrap;row-gap:10px}
 .kb-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* ---------- Update notification ---------- */
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
@@ -319,6 +320,86 @@ input[type=checkbox]{accent-color:var(--gold)}
   .sb-state{flex-basis:100%}
   .seg{width:100%}.seg button{flex:1;justify-content:center;padding:10px 6px}
   .board.noact{grid-template-columns:1fr 1fr}
+}
+/* ================= Refinements ================= */
+::selection{background:rgba(227,185,90,.35);color:#fff}
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+*::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:10px;border:2px solid transparent;background-clip:padding-box}*::-webkit-scrollbar-thumb:hover{background-color:rgba(255,255,255,.24)}
+.ph,main{margin-left:auto;margin-right:auto;width:100%;max-width:1360px}
+.ph{align-items:center;padding-top:30px;padding-bottom:6px}
+.ph h1{font-size:28px;letter-spacing:-.5px;line-height:1.15}
+.ph p{font-size:14.5px;margin-top:4px}
+.ph-ic{width:48px;height:48px;flex:none;border-radius:14px;display:grid;place-items:center;background:linear-gradient(140deg,rgba(227,185,90,.22),rgba(227,185,90,.06));border:1px solid rgba(227,185,90,.32);box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.1)}
+.ph-ic svg{width:23px;height:23px;stroke:var(--gold);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ph .today{font-size:13px;padding:6px 13px}
+main{padding-top:18px}
+#view{animation:viewin .28s ease both}
+@keyframes viewin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.card{border-radius:18px;padding:24px 26px;background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.04));box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 34px rgba(0,0,0,.18)}
+.card h2{font-size:16.5px;letter-spacing:-.1px}
+.metrics{border-radius:18px;box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 34px rgba(0,0,0,.18)}
+.metrics .m{padding:20px 24px 18px;transition:background .15s}
+.metrics .m h3,.card h3{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.stat{font-size:32px}
+.btn{transition:background .15s,border-color .15s,filter .15s,transform .1s}.btn:active:not(:disabled){transform:translateY(1px)}
+.btn.primary{box-shadow:0 6px 18px rgba(227,185,90,.22)}
+input.i,select.i,textarea.i{transition:border-color .15s,box-shadow .15s;background:rgba(0,0,0,.26)}
+input.i:hover:not(:focus),select.i:hover:not(:focus),textarea.i:hover:not(:focus){border-color:rgba(255,255,255,.26)}
+th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);background:rgba(20,22,27,.96)}
+td{line-height:1.4}
+#abreak td:first-child,.sched td:first-child{white-space:nowrap}
+.tablewrap{border-radius:14px}
+.week{border-radius:16px}
+.alert{border-width:1px;border-left-width:4px;border-color:color-mix(in srgb,currentColor 40%,transparent)}
+.board .b-cell:nth-child(2) .b-v,.board .b-cell:nth-child(3) .b-v,.board .b-cell:nth-child(4) .b-v{font-size:26px;white-space:nowrap}
+@media (min-width:1151px){.board{grid-template-columns:1.25fr 1.15fr 1.25fr 1fr auto}.board.noact{grid-template-columns:1.25fr 1.15fr 1.25fr 1fr}}
+.toast{box-shadow:0 14px 40px rgba(0,0,0,.45);background:rgba(28,31,37,.96)}
+.modal{animation:viewin .18s ease both}
+.modal .card{background:rgba(26,29,35,.97);box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.nav-sep{height:1px;background:var(--edge);margin:10px 8px}
+.brand .pin{display:none}
+
+/* ---- desktop: slim icon rail that opens when the cursor reaches it ---- */
+@media (min-width:821px){
+  .shell{grid-template-columns:78px 1fr;transition:grid-template-columns .22s ease}
+  body.nav-pinned .shell{grid-template-columns:256px 1fr}
+  .mainwrap{grid-column:2}
+  .side{position:fixed;left:0;top:0;bottom:0;height:100vh;width:78px;z-index:55;padding:18px 13px;overflow:hidden;
+    background:rgba(13,14,17,.82);transition:width .22s cubic-bezier(.3,.7,.2,1) .12s,box-shadow .22s .12s,background .22s .12s}
+  .side:hover,.side:has(:focus-visible),body.nav-pinned .side{width:256px;transition-delay:.04s}
+  .side:hover,.side:has(:focus-visible){box-shadow:24px 0 60px rgba(0,0,0,.5);background:rgba(15,16,20,.97)}
+  body.nav-pinned .side{box-shadow:none;background:rgba(13,14,17,.82)}
+  .side::after{content:"";position:absolute;top:50%;right:5px;width:3px;height:44px;margin-top:-22px;border-radius:3px;background:rgba(227,185,90,.35);transition:opacity .2s}
+  .side:hover::after,.side:has(:focus-visible)::after,body.nav-pinned .side::after{opacity:0}
+  .brand{padding:0 0 26px;gap:12px;overflow:hidden}
+  .brand img{width:52px;height:52px;flex:none}
+  .brand .bt,.nav .lbl,.me .who,.me button,.brand .pin{opacity:0;transition:opacity .15s}
+  .side:hover .bt,.side:has(:focus-visible) .bt,body.nav-pinned .bt,.side:hover .lbl,.side:has(:focus-visible) .lbl,body.nav-pinned .lbl,
+  .side:hover .me .who,.side:has(:focus-visible) .me .who,body.nav-pinned .me .who,.side:hover .me button,.side:has(:focus-visible) .me button,body.nav-pinned .me button,
+  .side:hover .pin,.side:has(:focus-visible) .pin,body.nav-pinned .pin{opacity:1;transition:opacity .2s .12s}
+  .brand .pin{display:grid;place-items:center;margin-left:auto;width:30px;height:30px;border-radius:9px;border:1px solid var(--edge);background:none;color:var(--faint);cursor:pointer;flex:none}
+  .brand .pin svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .brand .pin:hover{color:var(--ink);background:var(--glass)}
+  .brand .pin[aria-pressed="true"]{color:var(--gold-ink);background:var(--gold-grad);border-color:transparent}
+  .nav button{padding:12px 15px;gap:16px;white-space:nowrap;overflow:hidden}
+  .nav .lbl{flex:1}
+  .nav .badge{position:absolute;left:30px;top:5px;margin:0;font-size:10.5px;min-width:18px;line-height:18px;padding:0 5px;transition:left .2s,top .2s}
+  .side:hover .nav .badge,.side:has(:focus-visible) .nav .badge,body.nav-pinned .nav .badge{position:static;font-size:12px;min-width:22px;line-height:inherit}
+  .me{padding:8px;min-width:0;width:100%;overflow:hidden;border-color:transparent;background:none;transition:background .2s,border-color .2s}
+  .side:hover .me,.side:has(:focus-visible) .me,body.nav-pinned .me{border-color:var(--edge);background:var(--glass);padding:10px}
+  .me .who{white-space:nowrap}
+}
+
+/* ---- phones ---- */
+@media (max-width:820px){
+  .ph-ic{width:40px;height:40px;border-radius:12px}.ph-ic svg{width:20px;height:20px}
+  .ph{gap:12px}
+  .seg{gap:2px;padding:3px}
+  .seg button{flex-direction:column;gap:3px;font-size:12px;padding:8px 2px;min-width:0}
+  .seg button svg{width:18px;height:18px}
+  .nav-sep{display:none}
+  .board .b-cell:nth-child(2) .b-v,.board .b-cell:nth-child(3) .b-v,.board .b-cell:nth-child(4) .b-v{font-size:22px;white-space:normal}
+  .card{padding:20px}
 }
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.card,.metrics,.week,.req{background:#1A1D22}.side{background:#121418}}
@@ -857,6 +938,8 @@ const ICON = {
 };
 const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], leave:['Leaves','Your balance, requests and approvals.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
+function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
+function applyNavPin(){ const on=navPinned(); document.body.classList.toggle('nav-pinned', on); const b=$('#navpin'); if (b){ b.setAttribute('aria-pressed', on); b.title = on?'Let the menu hide':'Keep the menu open'; b.setAttribute('aria-label', b.title); } }
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
   const myRender = S.renderId = (S.renderId||0) + 1;
@@ -871,8 +954,8 @@ async function render(){
   $('#app').innerHTML = `
   <div class="shell">
     <aside class="side">
-      <div class="brand"><img src="${LOGO}" alt="GTO – Global Travel Organisation"><span class="bt"><b>GTO</b><span>Operations portal</span></span></div>
-      <nav class="nav" aria-label="Main">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}" ${S.tab===k?'aria-current="page"':''}>${ICON[k]}<span>${l}</span>${k==='leave'&&(pend+alerts)?`<span class="badge" title="Waiting for you">${pend+alerts}</span>`:''}${k==='kb'&&S.upUnread?`<span class="badge" title="New updates">${S.upUnread}</span>`:''}${k==='sched'&&swapsWaiting?`<span class="badge" title="Swap requests waiting">${swapsWaiting}</span>`:''}</button>`).join('')}</nav>
+      <div class="brand"><img src="${LOGO}" alt="GTO – Global Travel Organisation"><span class="bt"><b>GTO</b><span>Operations portal</span></span><button class="pin" id="navpin" title="${navPinned()?'Let the menu hide':'Keep the menu open'}" aria-label="${navPinned()?'Let the menu hide':'Keep the menu open'}" aria-pressed="${navPinned()}"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 4 4H6l4-4z"/><path d="M12 14v6"/></svg></button></div>
+      <nav class="nav" aria-label="Main">${tabs.map(([k,l])=>`${k==='admin'?'<div class="nav-sep" role="presentation"></div>':''}<button data-tab="${k}" class="${S.tab===k?'on':''}" ${S.tab===k?'aria-current="page"':''} title="${l}">${ICON[k]}<span class="lbl">${l}</span>${k==='leave'&&(pend+alerts)?`<span class="badge" title="Waiting for you">${pend+alerts}</span>`:''}${k==='kb'&&S.upUnread?`<span class="badge" title="New updates">${S.upUnread}</span>`:''}${k==='sched'&&swapsWaiting?`<span class="badge" title="Swap requests waiting">${swapsWaiting}</span>`:''}</button>`).join('')}</nav>
       <div class="me"><div class="av">${esc(initials(u.name))}</div><div class="who"><b>${esc(u.name)}</b><span>${esc(u.role)}</span></div>${DEMO?'':`<button id="signout" title="Sign out" aria-label="Sign out">${ICON.out}</button>`}</div>
     </aside>
     <div class="mainwrap">
@@ -880,13 +963,15 @@ async function render(){
       ${DEMO?`<div class="demo"><b>Demo</b> Sample people only, nothing is saved. Viewing as
         <select id="demoAs" class="i">${(await S.D.access()).rows.map(r=>`<option value="${r.Email}" ${r.Email===S.demoAs?'selected':''}>${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select></div>`:''}
       ${agent?'<div class="statusbar" id="statusbar" role="region" aria-label="Your status"></div>':''}
-      <header class="ph"><div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
+      <header class="ph">${S.tab!=='home'?`<div class="ph-ic" aria-hidden="true">${ICON[S.tab]}</div>`:''}<div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
       ${S.D && S.D.warnings && S.D.warnings.length ? `<div style="padding:0 36px;max-width:1300px"><div class="alert warn" style="margin:14px 0 0"><b>Some data couldn't be loaded:</b> ${S.D.warnings.map(esc).join(' · ')}</div></div>` : ''}
       <main id="view"><div class="loading">Loading…</div></main>
     </div>
   </div>`;
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
   $('#signout') && ($('#signout').onclick = ()=>msalApp.logoutRedirect());
+  $('#navpin') && ($('#navpin').onclick = e=>{ e.stopPropagation(); const v=!navPinned(); try{ localStorage.setItem('gto.navPinned', v?'1':''); }catch(_){} applyNavPin(); });
+  applyNavPin();
   $('#demoAs') && ($('#demoAs').onchange = e=>{ S.demoAs=e.target.value; S.tab='home'; boot(); });
   startUpdatePoll();
   if (agent) await mountStatusBar();
