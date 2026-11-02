@@ -1,10 +1,12 @@
 {
+  "regions": ["fra1"],
   "functions": { "api/index.js": { "maxDuration": 60 } },
   "rewrites": [
     { "source": "/api/setup", "destination": "/api?r=setup" },
     { "source": "/api/callback", "destination": "/api?r=callback" }
   ],
   "headers": [
+    { "source": "/gto-logo.png", "headers": [ { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" } ] },
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },
       { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },

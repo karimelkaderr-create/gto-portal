@@ -216,7 +216,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 /* ---------- Update notification ---------- */
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
 .upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
-.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
+.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
 @keyframes upin{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}@keyframes upring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){.upnote,.upnote .ic{animation:none}}
 @media (max-width:820px){.upnote{top:auto;bottom:92px;right:16px;left:16px;max-width:none}}
@@ -981,7 +981,7 @@ async function render(){
   $('#navpin') && ($('#navpin').onclick = e=>{ e.stopPropagation(); const v=!navPinned(); try{ localStorage.setItem('gto.navPinned', v?'1':''); }catch(_){} applyNavPin(); });
   applyNavPin();
   $('#demoAs') && ($('#demoAs').onchange = e=>{ S.demoAs=e.target.value; S.tab='home'; boot(); });
-  startUpdatePoll();
+  startUpdatePoll(); startOpsAlerts();
   if (agent) await mountStatusBar();
   try {
     await ({home:viewHome, att:viewAttendance, act:viewActivity, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
@@ -1142,9 +1142,10 @@ function actWire(R, onchange){
   $('#xq') && ($('#xq').oninput=()=>{ clearTimeout(window._xq); window._xq=setTimeout(()=>{ R.q=$('#xq').value; onchange(); },300); });
   $('#xd') && ($('#xd').onchange=()=>{ R.date=$('#xd').value||R.date; onchange(); });
 }
+function actState(){ const u=S.me; return S.act = S.act || { sub:'days', team: u.role==='Team Leader'?'mine':'all', q:'', date:dkey(new Date()), shift:'auto', period:'week', rdate:dkey(new Date()) }; }
 async function viewActivity(){
   const v=$('#view'); const u=S.me;
-  S.act = S.act || { sub:'days', team: u.role==='Team Leader'?'mine':'all', q:'', date:dkey(new Date()), shift:'auto', period:'week', rdate:dkey(new Date()) };
+  actState();
   const subs=[['days','Agent days activity'],['status','Current status'],['check','Attendance check'],['report','Hours report']];
   v.innerHTML=`<div class="kb-row" role="tablist" aria-label="Agent activity" style="margin:0 0 14px">${subs.map(([k,l])=>`<button class="pill ${S.act.sub===k?'on':''}" data-sub="${k}" role="tab" aria-selected="${S.act.sub===k}">${l}</button>`).join('')}</div><div id="actbody"></div>`;
   document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ S.act.sub=b.dataset.sub; viewActivity(); });
@@ -1841,6 +1842,52 @@ function startUpdatePoll(){
   const check = async () => { try { const r=await S.D.call('GET','updates'); handleUpdates(r.updates||[]); } catch(e){} };
   check(); setInterval(check, UPDATE_POLL_MS);
   document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) check(); });
+}
+
+/* ---- live alerts for team leaders / duty managers: late 10+ min, break over by 5+ min ---- */
+const LATE_ALERT_MIN=10, BREAK_ALERT_OVER=5, ALERT_POLL_MS=60000;
+function alertedSet(){ try { return new Set(JSON.parse(localStorage.getItem('gto.alerted')||'[]')); } catch(e){ return new Set(); } }
+function alertedSave(set){ try { localStorage.setItem('gto.alerted', JSON.stringify([...set].slice(-400))); } catch(e){} }
+function showOpsAlert(items){
+  document.querySelectorAll('.opnote').forEach(x=>x.remove());
+  const late=items.filter(i=>i.kind==='late'), brk=items.filter(i=>i.kind==='break');
+  const lines=[]; if (late.length) lines.push(`<b>${late.length} late (${LATE_ALERT_MIN}+ min, not logged in):</b> ${late.slice(0,6).map(i=>esc(i.name)).join(', ')}${late.length>6?' and '+(late.length-6)+' more':''}`);
+  if (brk.length) lines.push(`<b>${brk.length} over break (+${BREAK_ALERT_OVER} min):</b> ${brk.slice(0,6).map(i=>esc(i.name)+' ('+fmtMins(i.over)+' over)').join(', ')}${brk.length>6?' and '+(brk.length-6)+' more':''}`);
+  const d=document.createElement('div'); d.className='upnote opnote'; d.setAttribute('role','alert');
+  d.innerHTML=`<div class="ic">⏰</div><div class="tx"><b>Agent alert</b><span style="white-space:normal">${lines.join('<br>')}</span></div><button class="btn sm" data-open>View</button><button class="x" aria-label="Dismiss">×</button>`;
+  d.querySelector('[data-open]').onclick=()=>{ d.remove(); actState(); S.act.sub=late.length?'check':'status'; S.act.shift='all'; S.act.date=dkey(new Date()); S.tab='act'; render(); };
+  d.querySelector('.x').onclick=()=>d.remove();
+  document.body.appendChild(d); setTimeout(()=>d.remove(), 90000);
+  try { if (window.Notification && Notification.permission==='granted' && document.hidden) new Notification('GTO – agent alert', { body:items.map(i=>i.name+(i.kind==='late'?' late':' break over')).join(', ') }); } catch(e){}
+}
+async function checkOpsAlerts(){
+  const u=S.me; if (!u || !['Team Leader','Duty Manager','General Manager'].includes(u.role)) return;
+  await S.D.attendance(true);
+  const acc=(await S.D.access()).rows.filter(r=>r['Portal Role']==='Agent' && r.Email && !/^no$/i.test(String(r.Active||'').trim()));
+  const people=u.role==='Team Leader'?acc.filter(r=>r['Manager Email']===u.email):acc;
+  const ev=S.D.cache.att.rows; const today=new Date(); today.setHours(0,0,0,0); const k=dkey(today); const bm=S.settings.BreakMinutes;
+  const done=alertedSet(); const items=[];
+  for (const p of people){
+    const st=shiftState(ev,p.Email);
+    if (st.open && st.onBreak && st.breakMins > bm+BREAK_ALERT_OVER){
+      const id=`b|${p.Email}|${st.open.date}|${st.onBreak}`; if (!done.has(id)){ done.add(id); items.push({kind:'break',name:p['Full Name'],over:st.breakMins-bm}); }
+      continue;
+    }
+    if (st.open) continue;
+    const sh=await S.D.shiftFor(p,today); const ps=parseShift(sh.text); if (!ps) continue;
+    const start=today.getTime()+ps.start*6e4, late=(Date.now()-start)/6e4;
+    if (late<LATE_ALERT_MIN || late>360) continue;
+    if (ev.some(e=>e.Email===p.Email && e['Shift Date']===k && e.Action==='Clock In')) continue;
+    const id=`l|${p.Email}|${k}`; if (!done.has(id)){ done.add(id); items.push({kind:'late',name:p['Full Name'],mins:late}); }
+  }
+  if (items.length){ alertedSave(done); whistle(); showOpsAlert(items); }
+}
+function startOpsAlerts(){
+  if (S._opsPoll || DEMO || !(S.D instanceof ApiData) || !['Team Leader','Duty Manager','General Manager'].includes(S.me.role)) return; S._opsPoll=true;
+  try { if (window.Notification && Notification.permission==='default') Notification.requestPermission(); } catch(e){}
+  const run=async()=>{ if (document.hidden) return; try{ await checkOpsAlerts(); }catch(e){} };
+  setTimeout(run,4000); setInterval(run, ALERT_POLL_MS);
+  document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) run(); });
 }
 function kbSeen(){ try { return localStorage.getItem('gto.kbSeen')||''; } catch(e){ return ''; } }
 function kbMarkSeen(){ try { localStorage.setItem('gto.kbSeen', new Date().toISOString()); } catch(e){} }

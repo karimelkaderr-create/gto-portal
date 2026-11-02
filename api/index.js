@@ -173,7 +173,7 @@ async function cached(key, ttlMs, fn) { const c = memo[key]; if (c && Date.now()
 const forget = (...keys) => keys.forEach(k => delete memo[k]);
 
 /* ---------------- data loaders ---------------- */
-async function loadAccess() { return cached('access', 20000.0, loadAccessRaw); }
+async function loadAccess() { return cached('access', 60000.0, loadAccessRaw); }
 // "Sondos" or "Sondos Ahmed" → the one team leader / manager whose full name starts with those words (null if none or ambiguous)
 function findLeader(name, rows) {
   const toks = norm(name).split(' ').filter(Boolean); if (!toks.length) return null;
