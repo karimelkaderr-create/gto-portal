@@ -599,6 +599,46 @@ async function loadKb() {
     return { items, cats, source, error: error.slice(0, 200), loadedAt: new Date().toISOString() };
   });
 }
+/* Portal-side edits of the workbook's offers: the workbook itself is never changed. */
+const KBEDIT_HEADERS = ['Key', 'Hidden', 'Fields', 'Edited By', 'Edited At'];
+async function loadKbEdits() {
+  try { await ensureTable(URLS.portal, 'KB Edits', 'tblKbEdits', KBEDIT_HEADERS); const t = await table(URLS.portal, 'tblKbEdits'); t.rows = t.rows.filter(r => r.Key); return t; }
+  catch (e) { console.error('kb edits', e.message); return { headers: KBEDIT_HEADERS, rows: [], missing: true }; }
+}
+function deriveItem(it, base) {
+  it.cover = KB_COVER.map(([label, rx]) => { const f = Object.keys(it.fields).find(x => rx.test(x)); return [label, f ? kbCover(it.fields[f]) : null]; });
+  const tc = Object.entries(it.fields).find(([k]) => /terms/i.test(k)); const link = tc && (tc[1].match(/https?:\/\/\S+/) || [])[0]; it.link = link ? link.replace(/[)\].,]+$/, '') : undefined;
+  const st = kbStatus(it); if (st && st.status) Object.assign(it, st); else { it.status = base.status; it.end = base.end; }
+}
+async function loadKbView() {
+  const [kb, ed] = await Promise.all([loadKb(), cached('kbedits', 30e3, loadKbEdits)]);
+  const by = new Map(ed.rows.map(r => [r.Key, r])); const items = [], hidden = [];
+  for (const base of kb.items) {
+    const key = base.cat + '|' + base.name; const e = by.get(key);
+    if (!e) { items.push({ ...base, key }); continue; }
+    if (yes(e.Hidden)) { hidden.push({ key, name: base.name, cat: base.cat }); continue; }
+    let over = {}; try { over = JSON.parse(e.Fields || '{}'); } catch (_) { /* ignore */ }
+    const it = { ...base, key, fields: { ...base.fields, ...over }, edited: Object.keys(over).length > 0 }; if (it.edited) deriveItem(it, base); items.push(it);
+  }
+  return { ...kb, items, hidden, editsSig: ed.rows.map(r => r.Key + r['Edited At']).join(',') };
+}
+const canEditKb = u => u.admin || ['Duty Manager', 'General Manager'].includes(u.role);
+async function doKbEdit(u, b) {
+  if (!canEditKb(u)) deny('Only Duty Managers, the GM and admins can edit or hide topics.');
+  const key = String(b.key || ''); const kb = await loadKb(); const base = kb.items.find(i => i.cat + '|' + i.name === key); if (!base) bad('Topic not found.');
+  const t = await loadKbEdits(); if (t.missing) bad("The data file can't hold topic edits yet.");
+  let r = t.rows.find(x => x.Key === key); const isNew = !r; if (isNew) r = { Key: key, Hidden: '', Fields: '', 'Edited By': '', 'Edited At': '' };
+  if (b.reset) { r.Hidden = ''; r.Fields = ''; }
+  if (b.hide != null) r.Hidden = b.hide ? 'Yes' : '';
+  if (b.fields && typeof b.fields === 'object') {
+    let cur = {}; try { cur = JSON.parse(r.Fields || '{}'); } catch (_) { /* ignore */ }
+    for (const [k, v] of Object.entries(b.fields)) { if (!(k in base.fields)) bad('Unknown field: ' + k); const val = String(v ?? '').slice(0, 8000); if (val === base.fields[k]) delete cur[k]; else cur[k] = val; }
+    const js = JSON.stringify(cur); if (js.length > 30000) bad('That is too much text for one topic.'); r.Fields = js === '{}' ? '' : js;
+  }
+  r['Edited By'] = u.email; r['Edited At'] = new Date().toISOString();
+  if (isNew) await addRow(URLS.portal, 'tblKbEdits', rowFor(t.headers, r)); else await setRow(URLS.portal, 'tblKbEdits', r._i, t.headers.map(k => r[k] ?? ''));
+  forget('kbedits'); ixCache = null; return { ok: true };
+}
 const UPDATE_HEADERS = ['ID', 'Posted At', 'Posted By', 'Posted By Name', 'Title', 'Body', 'Category', 'Pinned', 'Active', 'Edited At', 'Edited By'];
 async function loadUpdates() {
   await ensureTable(URLS.portal, 'Updates', 'tblUpdates', UPDATE_HEADERS);
@@ -614,8 +654,8 @@ async function readUpdates() {
   return { updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))) };
 }
 async function readKb(u) {
-  const [kb, up] = await Promise.all([loadKb(), cached('updates', 30e3, loadUpdates)]);
-  return { ...kb, updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))), canPost: canPost(u), ai: true, aiPlus: !!AI_KEY, seesLog: ['Duty Manager', 'General Manager', 'Quality'].includes(u.role) || u.admin || yes(u.row['Quality Team']) };
+  const [kb, up] = await Promise.all([loadKbView(), cached('updates', 30e3, loadUpdates)]);
+  return { ...kb, hidden: canEditKb(u) ? kb.hidden : [], canEditKb: canEditKb(u), updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))), canPost: canPost(u), ai: true, aiPlus: !!AI_KEY, seesLog: ['Duty Manager', 'General Manager', 'Quality'].includes(u.role) || u.admin || yes(u.row['Quality Team']) };
 }
 async function doUpdate(u, b) {
   if (!canPost(u)) deny('Only team leaders and managers can post updates.');
@@ -637,9 +677,9 @@ function kbText(items) {
 const askLog = {}; let ixCache = null;
 const ASKLOG_HEADERS = ['ID', 'Asked At', 'Email', 'Name', 'Question', 'Answer Type'];
 async function assistIndex() {
-  const [kb, up] = await Promise.all([loadKb(), cached('updates', 30e3, loadUpdates)]);
+  const [kb, up] = await Promise.all([loadKbView(), cached('updates', 30e3, loadUpdates)]);
   const ups = up.rows.filter(r => !isNo(r.Active));
-  const key = kb.loadedAt + '|' + ups.map(r => r.ID + (r['Edited At'] || '')).join(',');
+  const key = kb.loadedAt + '|' + kb.editsSig + '|' + ups.map(r => r.ID + (r['Edited At'] || '')).join(',');
   if (!ixCache || ixCache.key !== key) ixCache = { key, ix: buildIndex(kb.items, ups), kb, ups };
   return ixCache;
 }
@@ -731,12 +771,13 @@ export default async function handler(req, res) {
       case 'disputerespond': out = await doDisputeRespond(u, acc, b); break;
       case 'kb': out = await readKb(u); break;
       case 'updates': out = await readUpdates(); break;
+      case 'kbedit': out = await doKbEdit(u, b); break;
       case 'update': out = await doUpdate(u, b); break;
       case 'ask': out = await doAsk(u, b); break;
       case 'asklog': out = await readAskLog(u); break;
       default: throw new HttpError(404, 'Unknown request.');
     }
-    ({ att: ['att'], req: ['req'], decide: ['req', 'tracker'], cancel: ['req'], retry: ['req', 'tracker'], swap: ['swaps'], swapdecide: ['swaps'], swapcancel: ['swaps'], access: ['access'], update: ['updates'] }[route] || []).forEach(k => forget(k));
+    ({ att: ['att'], req: ['req'], decide: ['req', 'tracker'], cancel: ['req'], retry: ['req', 'tracker'], swap: ['swaps'], swapdecide: ['swaps'], swapcancel: ['swaps'], access: ['access'], update: ['updates'], kbedit: ['kbedits'] }[route] || []).forEach(k => forget(k));
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json(out);
   } catch (e) {

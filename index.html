@@ -210,6 +210,8 @@ input[type=checkbox]{accent-color:var(--gold)}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 
 .up-act{display:flex;gap:8px;margin-top:10px}
+.kb-act{margin-left:auto;display:flex;gap:6px}
+.kb-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* ---------- Update notification ---------- */
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
 .upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
@@ -1618,6 +1620,7 @@ async function viewKb(){
       </div>
       <aside class="kb-side"><div class="card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0;font-size:18px">Updates</h2><span class="spacer"></span>${kb.canPost?'<button class="btn sm primary" id="kbpost">Post update</button>':''}</div>
         <div id="kbups"></div></div>
+        ${kb.canEditKb&&kb.hidden&&kb.hidden.length?`<div class="card" style="margin-top:14px"><h2 style="margin:0 0 4px;font-size:16px">Deleted topics <span class="muted" style="font-weight:500">${kb.hidden.length}</span></h2><p class="muted" style="margin:0 0 8px;font-size:12.5px">Hidden from the portal and the assistant. The workbook is untouched.</p>${kb.hidden.map(h=>`<div class="row" style="padding:6px 0;border-top:1px solid var(--edge)"><span style="font-size:13.5px;flex:1;min-width:0">${esc(h.name)}</span><button class="btn sm" data-kbrestore="${esc(h.key)}">Restore</button></div>`).join('')}</div>`:''}
         ${kb.seesLog?`<div class="card" style="margin-top:14px"><h2 style="margin:0 0 4px;font-size:16px">Questions GTO Assist couldn't answer</h2><p class="muted" style="margin:0 0 8px;font-size:12.5px">Add the missing details to the knowledge base sheet so it can answer them next time.</p><div id="kblog" class="muted" style="font-size:13.5px">Loading…</div></div>`:''}</aside>
     </div>
     <button class="ai-fab" id="aifab">${KBI.spark}<span>Ask GTO Assist</span></button>`;
@@ -1630,10 +1633,12 @@ async function viewKb(){
       const strong = scored.filter(x=>x[1]>=20); list = (strong.length && toks.length>1 ? strong : scored).sort((a,b)=>b[1]-a[1]||a[0].rank-b[0].rank).map(x=>x[0]); }
     else list.sort(F.sort==='az' ? (a,b)=>a.name.localeCompare(b.name) : F.sort==='old' ? (a,b)=>b.rank-a.rank : (a,b)=>a.rank-b.rank);
     $('#kbcount').textContent = `${list.length} ${list.length===1?'entry':'entries'}${toks.length?' matching “'+F.q.trim()+'”':''}`;
-    $('#kbgrid').innerHTML = list.length ? list.map(i=>`<button class="kb-card" data-kb="${esc(i.id)}"><div class="top"><span class="chip cat">${esc(i.cat)}</span>${kbChip(i)}</div><h3>${esc(i.name)}</h3><p>${esc(kbLead(i).slice(0,260))}</p>
-      <div class="foot"><div class="cov">${i.cover.map(([l,y],k)=>`<i class="${y===true?'y':y===false?'n':''}" title="${esc(l)}: ${y===true?'yes':y===false?'no':'see details'}">${KBI.cov[k]}</i>`).join('')}</div></div></button>`).join('')
+    $('#kbgrid').innerHTML = list.length ? list.map(i=>`<div class="kb-card" role="button" tabindex="0" data-kb="${esc(i.id)}"><div class="top"><span class="chip cat">${esc(i.cat)}</span>${kbChip(i)}${i.edited?'<span class="chip" title="Edited in the portal">edited</span>':''}</div><h3>${esc(i.name)}</h3><p>${esc(kbLead(i).slice(0,260))}</p>
+      <div class="foot"><div class="cov">${i.cover.map(([l,y],k)=>`<i class="${y===true?'y':y===false?'n':''}" title="${esc(l)}: ${y===true?'yes':y===false?'no':'see details'}">${KBI.cov[k]}</i>`).join('')}</div>${kb.canEditKb?`<div class="kb-act"><button class="btn sm" data-kbedit="${esc(i.id)}">Edit</button><button class="btn sm danger" data-kbhide="${esc(i.id)}">Delete</button></div>`:''}</div></div>`).join('')
       : `<div class="card center" style="grid-column:1/-1"><p class="muted" style="margin:0 0 12px">Nothing matches. Try fewer words, or ask the assistant.</p><button class="btn primary" id="kbaskq">Ask GTO Assist${F.q?' about “'+esc(F.q)+'”':''}</button></div>`;
-    document.querySelectorAll('[data-kb]').forEach(b=>b.onclick=()=>kbDetail(b.dataset.kb));
+    document.querySelectorAll('[data-kb]').forEach(b=>{ b.onclick=e=>{ if (e.target.closest('[data-kbedit],[data-kbhide]')) return; kbDetail(b.dataset.kb); }; b.onkeydown=e=>{ if ((e.key==='Enter'||e.key===' ') && e.target===b){ e.preventDefault(); kbDetail(b.dataset.kb); } }; });
+    document.querySelectorAll('[data-kbedit]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); kbEditForm(b.dataset.kbedit); });
+    document.querySelectorAll('[data-kbhide]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); kbHide(b); });
     $('#kbaskq') && ($('#kbaskq').onclick=()=>aiOpen(F.q));
   };
   const paintUps = () => {
@@ -1653,6 +1658,7 @@ async function viewKb(){
   document.querySelectorAll('[data-cov]').forEach(b=>b.onclick=()=>{ const k=+b.dataset.cov; F.cov=F.cov===k?-1:k; viewKb(); });
   $('#kbsort').onchange=e=>{ F.sort=e.target.value; paint(); };
   $('#kbpost') && ($('#kbpost').onclick=()=>kbPostForm());
+  document.querySelectorAll('[data-kbrestore]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await S.D.call('POST','kbedit',{ key:b.dataset.kbrestore, hide:false }); toast('Topic restored'); await kbData(true); viewKb(); }catch(e){ alertBox(e); b.disabled=false; } });
   $('#aifab').onclick=()=>aiOpen();
   paint(); paintUps();
   if (kb.seesLog && S.D instanceof ApiData) S.D.call('GET','asklog').then(r=>{ const el=$('#kblog'); if (!el || S.renderId!==myRender) return; el.innerHTML = r.rows.length ? r.rows.slice(0,15).map(x=>`<div class="kb-up" style="padding:9px 0"><div style="color:var(--ink);font-size:13.5px;unicode-bidi:plaintext">${esc(x.Question)}</div><div class="by">${esc(x.Name||x.Email)} · ${fmtDate(parseTs(x['Asked At']))} · ${esc(x['Answer Type'])}</div></div>`).join('') : 'None so far.'; }).catch(()=>{ const el=$('#kblog'); if (el) el.textContent='Not available.'; });
@@ -1671,7 +1677,7 @@ function kbDetail(id){
   const others = Object.entries(f).filter(([k])=>!/promotion details/i.test(k) && !shown.has(k) && !factKeys.has(k) && !covKeys.test(k));
   const linkify = s => esc(s).replace(/https?:\/\/[^\s<]+/g, u=>`<a href="${u.replace(/[).,]+$/,'')}" target="_blank" rel="noopener">${u}</a>`);
   const m=document.createElement('div'); m.className='modal'; m.innerHTML = `<div class="card wide" role="dialog" aria-modal="true" aria-label="${esc(it.name)}">
-    <div class="kb-d-head"><div style="flex:1;min-width:0"><span class="chip cat">${esc(it.cat)}</span>${kbChip(it)}<h2>${esc(it.name)}</h2></div><button class="btn" data-close aria-label="Close">✕</button></div>
+    <div class="kb-d-head"><div style="flex:1;min-width:0"><span class="chip cat">${esc(it.cat)}</span>${kbChip(it)}<h2>${esc(it.name)}</h2></div>${kb.canEditKb?`<button class="btn" data-kbedit2>Edit</button><button class="btn danger" data-kbhide2>Delete</button>`:''}<button class="btn" data-close aria-label="Close">✕</button></div>
     ${lead?`<div class="kb-sec" style="border-top:0;padding-top:16px"><small>${esc(lead[0])}</small><div>${linkify(lead[1])}</div></div>`:''}
     ${facts.length?`<div class="kb-facts">${facts.map(([l,x])=>`<div><small>${esc(l)}</small><span>${linkify(x)}</span></div>`).join('')}</div>`:''}
     <small style="display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px">What it can be used for</small>
@@ -1683,7 +1689,25 @@ function kbDetail(id){
   </div>`;
   document.body.appendChild(m);
   m.onclick=e=>{ if (e.target===m || e.target.closest('[data-close]')) m.remove(); };
+  m.querySelector('[data-kbedit2]') && (m.querySelector('[data-kbedit2]').onclick=()=>{ m.remove(); kbEditForm(id); });
+  m.querySelector('[data-kbhide2]') && (m.querySelector('[data-kbhide2]').onclick=e=>{ const b=e.currentTarget; b.dataset.kbhide=id; kbHide(b); });
   m.querySelector('#kbaskthis').onclick=()=>{ m.remove(); aiOpen(`Tell me the key points of "${it.name}" that I should explain to a member.`, true); };
+}
+function kbHide(btn){
+  const key=(S._kb.items.find(i=>i.id===btn.dataset.kbhide)||{}).key; if (!key) return;
+  if (!btn.dataset.sure){ btn.dataset.sure=1; btn.textContent='Click again to delete'; setTimeout(()=>{ if (btn.isConnected){ delete btn.dataset.sure; btn.textContent='Delete'; } },4000); return; }
+  btn.disabled=true; S.D.call('POST','kbedit',{ key, hide:true }).then(async()=>{ document.querySelectorAll('.modal').forEach(m=>m.remove()); toast('Topic deleted from the portal'); await kbData(true); viewKb(); }).catch(e=>{ alertBox(e); btn.disabled=false; });
+}
+function kbEditForm(id){
+  const it=S._kb.items.find(i=>i.id===id); if (!it) return;
+  const keys=Object.keys(it.fields).filter(k=>!/promotion details|product details/i.test(k));
+  const m=document.createElement('div'); m.className='modal'; m.innerHTML=`<div class="card wide" role="dialog" aria-modal="true" aria-label="Edit topic"><h2 style="margin:0 0 2px">Edit: ${esc(it.name)}</h2><p class="muted" style="margin:0 0 6px;font-size:13.5px">Changes show for everyone in the portal and in GTO Assist. The Promotions &amp; Products workbook itself is not changed.</p>
+    <div style="max-height:58vh;overflow:auto;padding-right:6px">${keys.map((k,i)=>`<label class="f">${esc(k)}</label><textarea class="i kbf" data-k="${i}" rows="${Math.min(8,Math.max(2,Math.ceil(String(it.fields[k]).length/90)))}">${esc(it.fields[k])}</textarea>`).join('')}</div>
+    <div class="row" style="margin-top:14px">${it.edited?'<button class="btn" id="kbreset">Reset to workbook</button>':''}<span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="kbsave">Save changes</button></div></div>`;
+  document.body.appendChild(m); m.onclick=e=>{ if (e.target===m || e.target.closest('[data-close]')) m.remove(); };
+  const send=async(body,msg,btn)=>{ btn.disabled=true; try{ await S.D.call('POST','kbedit',{ key:it.key, ...body }); document.querySelectorAll('.modal').forEach(x=>x.remove()); toast(msg); await kbData(true); viewKb(); }catch(e){ alertBox(e); btn.disabled=false; } };
+  $('#kbsave').onclick=()=>{ const fields={}; m.querySelectorAll('.kbf').forEach(t=>{ const k=keys[+t.dataset.k]; if (t.value.trim()!==String(it.fields[k]).trim()) fields[k]=t.value.trim(); }); if (!Object.keys(fields).length){ m.remove(); return toast('No changes'); } send({ fields },'Topic updated',$('#kbsave')); };
+  $('#kbreset') && ($('#kbreset').onclick=()=>send({ reset:true },'Back to the workbook version',$('#kbreset')));
 }
 function kbPostForm(ed){
   const m=document.createElement('div'); m.className='modal'; m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-label="${ed?'Edit update':'Post an update'}"><h2>${ed?'Edit update':'Post an update'}</h2><p class="muted" style="margin-top:-4px">${ed?'Changes show for everyone straight away.':'Everyone in the portal is notified with a whistle, and GTO Assist uses it when answering.'}</p>
