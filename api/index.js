@@ -174,12 +174,20 @@ const forget = (...keys) => keys.forEach(k => delete memo[k]);
 
 /* ---------------- data loaders ---------------- */
 async function loadAccess() { return cached('access', 20000.0, loadAccessRaw); }
+// "Sondos" or "Sondos Ahmed" → the one team leader / manager whose full name starts with those words (null if none or ambiguous)
+function findLeader(name, rows) {
+  const toks = norm(name).split(' ').filter(Boolean); if (!toks.length) return null;
+  const hits = rows.filter(r => MANAGER_ROLES.includes(String(r['Portal Role'] || '').trim()) && !isNo(r.Active) && r.Email).filter(r => {
+    const full = norm(r['Full Name']).split(' '); return toks.every((t, i) => full[i] === t || (t.length >= 5 && full[i] && lev1(t, full[i])));
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
 async function loadAccessRaw() {
   const t = await table(URLS.portal, T.access);
   t.rows = t.rows.filter(r => r.Email || r['Full Name']);
   t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Manager Email'] = normEmail(r['Manager Email']); r['Personal Email'] = normEmail(r['Personal Email']); r['Portal Role'] = String(r['Portal Role'] || '').trim(); });
   const byName = new Map(t.rows.map(r => [norm(r['Full Name']), r])); t.rows.forEach(r => { [r['Roster Name'], ...String(r['Previous Name'] || '').split(';')].forEach(x => { if (norm(x) && !byName.has(norm(x))) byName.set(norm(x), r); }); });
-  t.rows.forEach(r => { const tl = r['Team Leader'] ? byName.get(norm(r['Team Leader'])) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader'] || ''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
+  t.rows.forEach(r => { const tl = r['Team Leader'] ? (byName.get(norm(r['Team Leader'])) || findLeader(r['Team Leader'], t.rows)) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader'] || ''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
   return t;
 }
 async function loadSettings() { return cached('settings', 300000.0, loadSettingsRaw); }
@@ -378,7 +386,7 @@ async function doAccess(u, accCached, b) {
   const renamed = old && norm(old['Full Name']) !== norm(o['Full Name']);
   if (renamed && !acc.headers.includes('Previous Name')) { await ensureAccessColumn(acc, 'Previous Name'); acc = await loadAccessRaw(); }
   const H = acc.headers;
-  const tl = acc.rows.find(x => nameKeys(x).includes(norm(o['Team Leader']))); const clean = { ...o, Email: normEmail(o.Email), 'Manager Email': tl ? tl.Email : normEmail(o['Manager Email']) };
+  const tl = acc.rows.find(x => nameKeys(x).includes(norm(o['Team Leader']))) || findLeader(o['Team Leader'], acc.rows); const clean = { ...o, Email: normEmail(o.Email), 'Manager Email': tl ? tl.Email : normEmail(o['Manager Email']) };
   if (tl && norm(o['Team Leader']) !== norm(tl['Full Name'])) clean['Team Leader'] = tl['Full Name'];
   // Renaming someone: keep the old name in 'Previous Name' so their Leaves Tracker history, balance and team links still match
   if (renamed) { const prev = String(old['Previous Name'] || '').split(';').map(x => x.trim()).filter(Boolean); if (!prev.some(x => norm(x) === norm(old['Full Name']))) prev.push(String(old['Full Name']).trim()); clean['Previous Name'] = prev.filter(x => norm(x) !== norm(clean['Full Name'])).join('; '); }
