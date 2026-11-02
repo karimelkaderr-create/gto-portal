@@ -266,7 +266,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 .kb-sec{padding:14px 0;border-top:1px solid var(--edge)}.kb-sec div{font-size:14.5px;line-height:1.6;white-space:pre-line;word-break:break-word}
 .kb-sec a,.ai-msg a{color:var(--gold)}
 /* assistant */
-.ai-fab{position:fixed;right:28px;bottom:28px;z-index:45;display:flex;align-items:center;gap:10px;padding:13px 20px 13px 16px;border-radius:999px;border:0;cursor:pointer;background:var(--gold-grad);color:var(--gold-ink);font-weight:700;font-size:15px;box-shadow:0 12px 34px rgba(227,185,90,.35),0 0 0 1px rgba(255,255,255,.2) inset}
+.ai-fab{transition:top .35s cubic-bezier(.2,.8,.2,1),box-shadow .2s,transform .2s;position:fixed;right:28px;bottom:28px;z-index:45;display:flex;align-items:center;gap:10px;padding:13px 20px 13px 16px;border-radius:999px;border:0;cursor:pointer;background:var(--gold-grad);color:var(--gold-ink);font-weight:700;font-size:15px;box-shadow:0 12px 34px rgba(227,185,90,.35),0 0 0 1px rgba(255,255,255,.2) inset}
 .ai-fab svg,.ai-head svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ai-fab:hover{filter:brightness(1.06)}
 .ai-panel{position:fixed;top:0;right:0;bottom:0;width:min(470px,100vw);z-index:60;display:flex;flex-direction:column;background:rgba(17,19,23,.92);border-left:1px solid var(--edge-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);box-shadow:-30px 0 80px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .25s ease}
@@ -1683,25 +1683,29 @@ function setUpdBadge(n){
   let b=btn.querySelector('.badge'); if (!n){ b&&b.remove(); } else { if (!b){ b=document.createElement('span'); b.className='badge'; b.title='New updates'; btn.appendChild(b); } b.textContent=n; }
   document.title = (n?`(${n}) `:'') + 'GTO Operations portal';
 }
+const upTime = u => { const a=String(u['Posted At']||''), b=String(u['Edited At']||''); return b>a?b:a; };
+const upWho = u => u['Edited At'] && String(u['Edited At'])>=String(u['Posted At']||'') ? (u['Edited By']||u['Posted By']) : u['Posted By'];
 function updSig(u){ return [u.ID,u['Edited At']||'',u.Pinned||'',u.Active||''].join('|'); }
-function showUpdateToast(fresh){
+function showUpdateToast(fresh, edited){
   document.querySelectorAll('.upnote').forEach(x=>x.remove());
   const f=fresh[0]; const d=document.createElement('div'); d.className='upnote'; d.setAttribute('role','alert');
-  d.innerHTML=`<div class="ic">🔔</div><div class="tx"><b>${fresh.length===1?'New update':fresh.length+' new updates'}</b><span>${esc(f.Title)}${fresh.length>1?' and more':''}</span><small>${esc(f['Posted By Name']||'')}</small></div><button class="btn sm primary" data-open>Read</button><button class="x" aria-label="Dismiss">×</button>`;
+  d.innerHTML=`<div class="ic">🔔</div><div class="tx"><b>${edited?(fresh.length===1?'Update edited':fresh.length+' updates edited'):(fresh.length===1?'New update':fresh.length+' new updates')}</b><span>${esc(f.Title)}${fresh.length>1?' and more':''}</span><small>${esc(f['Posted By Name']||'')}</small></div><button class="btn sm primary" data-open>Read</button><button class="x" aria-label="Dismiss">×</button>`;
   d.querySelector('[data-open]').onclick=()=>{ d.remove(); S.tab='kb'; render(); };
   d.querySelector('.x').onclick=()=>d.remove();
   document.body.appendChild(d); setTimeout(()=>d.remove(), 30000);
-  try { if (window.Notification && Notification.permission==='granted' && document.hidden) new Notification('GTO – '+(fresh.length===1?'new update':fresh.length+' new updates'), { body:f.Title }); } catch(e){}
+  try { if (window.Notification && Notification.permission==='granted' && document.hidden) new Notification('GTO – '+(edited?'update edited':(fresh.length===1?'new update':fresh.length+' new updates')), { body:f.Title }); } catch(e){}
 }
 function handleUpdates(list){
   const me=S.me; const sig=new Map(list.map(u=>[u.ID,updSig(u)])); const prev=S.upSig;
   if (S._kb) { S._kb.updates=list; S._kbAt=Date.now(); }
   S.upSig=sig; const seen=kbSeen();
-  setUpdBadge(S.tab==='kb' ? 0 : list.filter(u=>String(u['Posted At'])>seen && u['Posted By']!==me.email).length);
+  setUpdBadge(S.tab==='kb' ? 0 : list.filter(u=>upTime(u)>seen && upWho(u)!==me.email).length);
   if (!prev) return;
   const fresh=list.filter(u=>!prev.has(u.ID) && u['Posted By']!==me.email);
   const changed=fresh.length || [...sig].some(([id,v])=>prev.get(id)!==v) || [...prev.keys()].some(id=>!sig.has(id));
+  const edits=list.filter(u=>prev.has(u.ID) && u['Edited At'] && !String(prev.get(u.ID)).includes('|'+u['Edited At']+'|') && u['Edited By']!==me.email);
   if (fresh.length){ whistle(); showUpdateToast(fresh); }
+  else if (edits.length){ whistle(); showUpdateToast(edits, true); }
   if (changed && S.tab==='kb' && !document.querySelector('.modal')) viewKb();
 }
 function startUpdatePoll(){
@@ -1757,7 +1761,7 @@ async function viewKb(){
   };
   const paintUps = () => {
     const ups = kb.updates||[]; const me=S.me; const boss=['Duty Manager','General Manager'].includes(me.role)||me.admin;
-    $('#kbups').innerHTML = ups.length ? ups.slice(0,25).map(u=>{ const t=parseTs(u['Posted At']); const fresh = !seenBefore || String(u['Posted At'])>seenBefore; return `<div class="kb-up" data-up="${esc(u.ID)}"><h4>${/^y/i.test(u.Pinned)?`<span title="Pinned" style="color:var(--gold)">${KBI.pin.replace('<svg','<svg style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-2px"')}</span>`:''}${fresh&&(Date.now()-t)<7*864e5?'<span class="newtag">NEW</span>':''}<span>${esc(u.Title)}</span></h4>
+    $('#kbups').innerHTML = ups.length ? ups.slice(0,25).map(u=>{ const t=parseTs(u['Posted At']); const fresh = !seenBefore || upTime(u)>seenBefore; return `<div class="kb-up" data-up="${esc(u.ID)}"><h4>${/^y/i.test(u.Pinned)?`<span title="Pinned" style="color:var(--gold)">${KBI.pin.replace('<svg','<svg style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-2px"')}</span>`:''}${fresh&&(Date.now()-t)<7*864e5?'<span class="newtag">NEW</span>':''}<span>${esc(u.Title)}</span></h4>
       <div class="body">${esc(u.Body)}</div><div class="by"><span class="chip" style="margin:0">${esc(u.Category||'General')}</span>${esc(u['Posted By Name']||'')} · ${fmtDate(t)}${String(u.Body).length>180?'<button data-more>Show more</button>':''}${u['Edited At']?`<span title="Edited ${esc(fmtDate(parseTs(u['Edited At'])))}">· edited</span>`:''}</div>${(u['Posted By']===me.email||boss)&&kb.canPost?`<div class="up-act"><button class="btn sm" data-ed="${esc(u.ID)}">Edit</button><button class="btn sm" data-pin="${esc(u.ID)}" data-v="${/^y/i.test(u.Pinned)?0:1}">${/^y/i.test(u.Pinned)?'Unpin':'Pin'}</button><button class="btn sm danger" data-rm="${esc(u.ID)}">Delete</button></div>`:''}</div>`; }).join('')
       : `<p class="muted" style="margin:6px 0 0;font-size:14px">No updates yet.${kb.canPost?' Post the first one: new offers, process changes or reminders for the team.':''}</p>`;
     document.querySelectorAll('[data-more]').forEach(b=>b.onclick=()=>{ const d=b.closest('.kb-up'); d.classList.toggle('open'); b.textContent=d.classList.contains('open')?'Show less':'Show more'; });
@@ -1774,6 +1778,16 @@ async function viewKb(){
   $('#kbpost') && ($('#kbpost').onclick=()=>kbPostForm());
   document.querySelectorAll('[data-kbrestore]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await S.D.call('POST','kbedit',{ key:b.dataset.kbrestore, hide:false }); toast('Topic restored'); await kbData(true); viewKb(); }catch(e){ alertBox(e); b.disabled=false; } });
   $('#aifab').onclick=()=>aiOpen();
+    (function followScroll(){
+      const fab=$('#aifab'); if(!fab) return; let tk=false;
+      const place=()=>{ tk=false; if(!fab.isConnected){ window.removeEventListener('scroll',place,true); window.removeEventListener('resize',place); return; }
+        const h=fab.offsetHeight||48, vh=window.innerHeight, base=window.innerWidth<=820?96:28;
+        const max=document.documentElement.scrollHeight-vh; const p=max>0?Math.min(1,Math.max(0,(window.scrollY||0)/max)):0;
+        const top=Math.round(100+p*Math.max(0,vh-h-base-100));
+        fab.style.bottom='auto'; fab.style.top=top+'px'; };
+      const req=()=>{ if(!tk){ tk=true; requestAnimationFrame(place); } };
+      window.addEventListener('scroll',req,true); window.addEventListener('resize',req); place();
+    })();
   paint(); paintUps();
   if (kb.seesLog && S.D instanceof ApiData) S.D.call('GET','asklog').then(r=>{ const el=$('#kblog'); if (!el || S.renderId!==myRender) return; el.innerHTML = r.rows.length ? r.rows.slice(0,15).map(x=>`<div class="kb-up" style="padding:9px 0"><div style="color:var(--ink);font-size:13.5px;unicode-bidi:plaintext">${esc(x.Question)}</div><div class="by">${esc(x.Name||x.Email)} · ${fmtDate(parseTs(x['Asked At']))} · ${esc(x['Answer Type'])}</div></div>`).join('') : 'None so far.'; }).catch(()=>{ const el=$('#kblog'); if (el) el.textContent='Not available.'; });
   else if ($('#kblog')) $('#kblog').textContent='None so far.';
@@ -1937,9 +1951,9 @@ async function viewHome(){
     <div class="week">${days.map((d,i)=>{ const t=shifts[i].text; const ps=parseShift(t); const off=!ps; return `<div class="${dkey(d)===tk?'today':''} ${off?'off':''}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(t)}">${esc(ps?ps.label:(t||'—'))}</b></div>`; }).join('')}</div>`;
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.go; render(); });
   if (S.renderId === myRender) await mountBoard($('#board'));
-  kbData().then(kb=>{ if (S.renderId !== myRender) return; const seen=kbSeen(); const fresh=(kb.updates||[]).filter(u=>String(u['Posted At'])>seen && Date.now()-parseTs(u['Posted At'])<7*864e5);
+  kbData().then(kb=>{ if (S.renderId !== myRender) return; const seen=kbSeen(); const fresh=(kb.updates||[]).filter(u=>upTime(u)>seen && upWho(u)!==S.me.email && Date.now()-parseTs(upTime(u))<7*864e5);
     if (!fresh.length) return; const d=document.createElement('div'); d.className='alert info'; d.style.cursor='pointer';
-    d.innerHTML=`<b>${fresh.length===1?'New update':fresh.length+' new updates'}:</b> ${esc(fresh[0].Title)}${fresh.length>1?' and more':''}. Open the Updates tab to read ${fresh.length===1?'it':'them'}.`;
+    d.innerHTML=`<b>${fresh.length===1?(fresh[0]['Edited At']&&String(fresh[0]['Edited At'])>=String(fresh[0]['Posted At'])?'Updated':'New update'):fresh.length+' new or edited updates'}:</b> ${esc(fresh[0].Title)}${fresh.length>1?' and more':''}. Open the Updates tab to read ${fresh.length===1?'it':'them'}.`;
     d.onclick=()=>{ S.tab='kb'; render(); }; $('#view').prepend(d); }).catch(()=>{});
 }
 
