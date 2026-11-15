@@ -846,8 +846,11 @@ async function bookByName(re) {
 async function loadCredits() {
   if (creditsMemo && Date.now() - creditsMemo.at < 60e3) return creditsMemo.v;
   let r; try { let b; try { b = await book(URLS.credits); } catch (e) { b = await bookByName(/wallet system/i); if (!b) throw e; }
-    r = await g('GET', `${b}/worksheets('${CREDITS_SHEET}')/usedRange(valuesOnly=true)?$select=values,text`); }
-  catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}${creditsDiag ? ' · ' + creditsDiag : ''}). Check that the portal account can open it and that the tab is called "${CREDITS_SHEET}".`); }
+    const sheets = ((await g('GET', `${b}/worksheets?$select=name,visibility`)).value || []).filter(x => x.visibility !== 'Hidden').map(x => x.name);
+    const sheet = sheets.find(n => n === CREDITS_SHEET) || sheets.find(n => /balance/i.test(n)) || (sheets.length === 1 ? sheets[0] : null);
+    if (!sheet) throw new Error(`no tab called "${CREDITS_SHEET}"; the tabs in this file are: ${sheets.join(', ') || 'none visible'}`);
+    r = await g('GET', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')/usedRange(valuesOnly=true)?$select=values,text`); }
+  catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}${creditsDiag ? ' · ' + creditsDiag : ''}). If a tab name is listed above, tell me which one holds the balances.`); }
   const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v }; return v;
 }
 async function readCredits(u, q) {
