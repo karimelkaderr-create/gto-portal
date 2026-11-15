@@ -3,6 +3,7 @@
 // staff never get file access. Every request is checked against the Access list.
 import crypto from 'node:crypto';
 import { buildIndex, answer as localAnswer } from './assist.js';
+import { readSheet } from '../lib/xlsx-lite.js';
 const blob = () => globalThis.__blobMock || import('@vercel/blob');
 
 const CLIENT_ID = process.env.CLIENT_ID || 'b57c476e-4a3e-498c-a114-2aa2638997d0';
@@ -831,6 +832,7 @@ function parseCredits(r) {
   return { clients, dateLabel: (head[cDate] || '').trim() || 'Date', balanceLabel: (head[cBal] || '').trim() || 'Balance', foundHeader: h >= 0 };
 }
 let creditsMemo = null;
+export const __resetCredits = () => { creditsMemo = null; };
 // when the sharing link can't be used, find the file by name among the files shared with (or searchable by) the portal account
 let creditsDiag = '';
 async function bookByName(re) {
@@ -843,15 +845,26 @@ async function bookByName(re) {
   const ri = hit.remoteItem || hit; const drive = (ri.parentReference || {}).driveId; if (!drive || !ri.id) return null;
   return `/drives/${drive}/items/${ri.id}/workbook`;
 }
+// workbooks Excel for the web can't open (so Graph's workbook API refuses them) are downloaded and read directly
+async function readCreditsFile(b) {
+  const res = await fetch('https://graph.microsoft.com/v1.0' + b.replace(/\/workbook$/, '') + '/content', { headers: { Authorization: 'Bearer ' + await opsToken() }, redirect: 'follow' });
+  if (!res.ok) throw new Error(`download failed (${res.status})`);
+  const out = readSheet(Buffer.from(await res.arrayBuffer()), names => names.find(n => n === CREDITS_SHEET) || names.find(n => /balance/i.test(n)) || (names.length === 1 ? names[0] : null));
+  if (!out.values) throw new Error(`no tab called "${CREDITS_SHEET}"; the tabs in this file are: ${out.names.join(', ') || 'none'}`);
+  return { values: out.values, text: out.text, viaFile: true };
+}
 async function loadCredits() {
-  if (creditsMemo && Date.now() - creditsMemo.at < 60e3) return creditsMemo.v;
-  let r; try { let b; try { b = await book(URLS.credits); } catch (e) { b = await bookByName(/wallet system/i); if (!b) throw e; }
-    const sheets = ((await g('GET', `${b}/worksheets?$select=name,visibility`)).value || []).filter(x => x.visibility !== 'Hidden').map(x => x.name);
-    const sheet = sheets.find(n => n === CREDITS_SHEET) || sheets.find(n => /balance/i.test(n)) || (sheets.length === 1 ? sheets[0] : null);
-    if (!sheet) throw new Error(`no tab called "${CREDITS_SHEET}"; the tabs in this file are: ${sheets.join(', ') || 'none visible'}`);
-    r = await g('GET', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')/usedRange(valuesOnly=true)?$select=values,text`); }
-  catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}${creditsDiag ? ' · ' + creditsDiag : ''}). If a tab name is listed above, tell me which one holds the balances.`); }
-  const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v }; return v;
+  if (creditsMemo && Date.now() - creditsMemo.at < creditsMemo.ttl) return creditsMemo.v;
+  let r, b;
+  try { try { b = await book(URLS.credits); } catch (e) { b = await bookByName(/wallet system/i); if (!b) throw e; }
+    try {
+      const sheets = ((await g('GET', `${b}/worksheets?$select=name,visibility`)).value || []).filter(x => x.visibility !== 'Hidden').map(x => x.name);
+      const sheet = sheets.find(n => n === CREDITS_SHEET) || sheets.find(n => /balance/i.test(n)) || (sheets.length === 1 ? sheets[0] : null);
+      if (!sheet) throw new Error(`no tab called "${CREDITS_SHEET}"; the tabs in this file are: ${sheets.join(', ') || 'none visible'}`);
+      r = await g('GET', `${b}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')/usedRange(valuesOnly=true)?$select=values,text`);
+    } catch (e) { if (/no tab called/.test(e.message)) throw e; console.error('credits via Excel API failed, reading the file directly:', e.message); r = await readCreditsFile(b); }
+  } catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}${creditsDiag ? ' · ' + creditsDiag : ''}). If a tab name is listed above, tell me which one holds the balances.`); }
+  const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v, ttl: r.viaFile ? 300e3 : 60e3 }; return v;
 }
 async function readCredits(u, q) {
   const data = await loadCredits(); const qs = sNorm(q), qd = digitsOf(q);
