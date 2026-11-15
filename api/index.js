@@ -830,9 +830,20 @@ function parseCredits(r) {
   return { clients, dateLabel: (head[cDate] || '').trim() || 'Date', balanceLabel: (head[cBal] || '').trim() || 'Balance', foundHeader: h >= 0 };
 }
 let creditsMemo = null;
+// when the sharing link can't be used, find the file by name among the files shared with (or searchable by) the portal account
+async function bookByName(re) {
+  const items = [];
+  try { items.push(...((await g('GET', '/me/drive/sharedWithMe?$top=200')).value || [])); } catch (e) { console.error('sharedWithMe', e.message); }
+  let hit = items.find(x => re.test(x.name || ''));
+  if (!hit) { try { hit = ((await g('GET', "/me/drive/search(q='Wallet System')?$top=50")).value || []).find(x => re.test(x.name || '')); } catch (e) { console.error('drive search', e.message); } }
+  if (!hit) return null;
+  const ri = hit.remoteItem || hit; const drive = (ri.parentReference || {}).driveId; if (!drive || !ri.id) return null;
+  return `/drives/${drive}/items/${ri.id}/workbook`;
+}
 async function loadCredits() {
   if (creditsMemo && Date.now() - creditsMemo.at < 60e3) return creditsMemo.v;
-  let r; try { const b = await book(URLS.credits); r = await g('GET', `${b}/worksheets('${CREDITS_SHEET}')/usedRange(valuesOnly=true)?$select=values,text`); }
+  let r; try { let b; try { b = await book(URLS.credits); } catch (e) { b = await bookByName(/wallet system/i); if (!b) throw e; }
+    r = await g('GET', `${b}/worksheets('${CREDITS_SHEET}')/usedRange(valuesOnly=true)?$select=values,text`); }
   catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}). Check that the portal account can open it and that the tab is called "${CREDITS_SHEET}".`); }
   const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v }; return v;
 }
