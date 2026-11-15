@@ -129,6 +129,7 @@ async function g(method, path, body, tries = 0, noSession = false) {
   const wb = !noSession && path.match(/^(\/drives\/[^/]+\/items\/[^/]+\/workbook)\//);
   const sid = wb ? await sessionFor(wb[1]) : null;
   const headers = { Authorization: 'Bearer ' + await opsToken(), 'Content-Type': 'application/json' }; if (sid) headers['workbook-session-id'] = sid;
+  if (path.startsWith('/shares/')) headers.Prefer = 'redeemSharingLinkIfNecessary'; // lets links meant for specific people work for this account
   const res = await fetch('https://graph.microsoft.com/v1.0' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   if (sid && (res.status === 404 || res.status === 400) && tries < 1) { const txt = await res.clone().text(); if (/session/i.test(txt)) { delete sessions[wb[1]]; return g(method, path, body, tries + 1, noSession); } }
   if ([429, 409, 503, 504].includes(res.status) && tries < 4) { await new Promise(r => setTimeout(r, 700 * (tries + 1))); return g(method, path, body, tries + 1, noSession); }
@@ -831,9 +832,11 @@ function parseCredits(r) {
 }
 let creditsMemo = null;
 // when the sharing link can't be used, find the file by name among the files shared with (or searchable by) the portal account
+let creditsDiag = '';
 async function bookByName(re) {
   const items = [];
   try { items.push(...((await g('GET', '/me/drive/sharedWithMe?$top=200')).value || [])); } catch (e) { console.error('sharedWithMe', e.message); }
+  creditsDiag = `shared files visible: ${items.length}`;
   let hit = items.find(x => re.test(x.name || ''));
   if (!hit) { try { hit = ((await g('GET', "/me/drive/search(q='Wallet System')?$top=50")).value || []).find(x => re.test(x.name || '')); } catch (e) { console.error('drive search', e.message); } }
   if (!hit) return null;
@@ -844,7 +847,7 @@ async function loadCredits() {
   if (creditsMemo && Date.now() - creditsMemo.at < 60e3) return creditsMemo.v;
   let r; try { let b; try { b = await book(URLS.credits); } catch (e) { b = await bookByName(/wallet system/i); if (!b) throw e; }
     r = await g('GET', `${b}/worksheets('${CREDITS_SHEET}')/usedRange(valuesOnly=true)?$select=values,text`); }
-  catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}). Check that the portal account can open it and that the tab is called "${CREDITS_SHEET}".`); }
+  catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}${creditsDiag ? ' · ' + creditsDiag : ''}). Check that the portal account can open it and that the tab is called "${CREDITS_SHEET}".`); }
   const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v }; return v;
 }
 async function readCredits(u, q) {
