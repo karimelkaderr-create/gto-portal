@@ -197,7 +197,9 @@ async function loadSettingsRaw() { const t = await table(URLS.portal, T.set); co
 async function loadAttendance() { return cached('att', 15000.0, loadAttendanceRaw); }
 async function loadAttendanceRaw() { const t = await tableTail(URLS.portal, T.att, 20000); t.rows = t.rows.filter(r => r.ID).map(r => ({ ...r, Email: normEmail(r.Email), 'Shift Date': toKey(r['Shift Date']), Timestamp: tsString(r.Timestamp) })); return t; }
 async function loadRequests() { return cached('req', 15000.0, loadRequestsRaw); }
-async function loadRequestsRaw() { const t = await table(URLS.portal, T.req); t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Submitted By'] = normEmail(r['Submitted By']); r['Submitted At'] = tsString(r['Submitted At']); r.dateList = String(r.Dates || '').split(/[,\s]+/).filter(Boolean); }); return t; }
+async function loadRequestsRaw() { let t = await table(URLS.portal, T.req);
+  for (const name of ['Exception', 'Exception Note']) if (!t.headers.includes(name)) { try { const b = await book(URLS.portal); await g('POST', `${b}/tables/${T.req}/columns/add`, { name }); t = await table(URLS.portal, T.req); } catch (e) { console.error('requests column', name, e.message); } }
+  t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Submitted By'] = normEmail(r['Submitted By']); r['Submitted At'] = tsString(r['Submitted At']); r.dateList = String(r.Dates || '').split(/[,\s]+/).filter(Boolean); }); return t; }
 async function loadSwaps() { return cached('swaps', 15000.0, loadSwapsRaw); }
 async function loadSwapsRaw() { let t; try { t = await table(URLS.portal, T.swap); } catch (e) { return { headers: [], rows: [], missing: true }; }
   if (!t.headers.includes('Type')) { try { const b = await book(URLS.portal); await g('POST', `${b}/tables/${T.swap}/columns/add`, { name: 'Type' }); t = await table(URLS.portal, T.swap); } catch (e) { console.error('swap type column', e.message); } } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
@@ -309,6 +311,23 @@ async function ptoLeft(person, reqs, excludeId) {
   return { allowance: b.allowance, used, pending, left: b.allowance - used - pending };
 }
 const plural = (n, w) => { n = +(+n).toFixed(1); return `${n} ${w}${n === 1 ? '' : 's'}`; };
+/* ---- holiday capacity: the most people from one group who may be off on the same day ---- */
+const CAPACITY = [
+  { key: 'enquiry', label: 'Enquiry agents', cap: 7, re: /^enquiry agent/ },
+  { key: 'resv', label: 'Reservation agents', cap: 2, re: /^reservation agent|^resv agent/ },
+  { key: 'dm', label: 'Duty Managers', cap: 1, re: /duty man/ },
+  { key: 'tl-enq', label: 'Enquiry team leaders', cap: 2, re: /^tl\s*-?\s*enq/ },
+  { key: 'tl-resv', label: 'Reservation team leaders', cap: 1, re: /^tl\s*-?\s*res/ },
+];
+const capGroup = role => { const r = String(role || '').trim().toLowerCase().replace(/\s+/g, ' '); const hit = CAPACITY.find(c => c.re.test(r)); return hit ? { key: hit.key, label: hit.label, cap: hit.cap } : { key: 'other:' + (r || 'unknown'), label: String(role || 'This group').trim() || 'This group', cap: 1 }; };
+const LEADS = ['Team Leader', 'Duty Manager', 'General Manager', 'HR'];
+async function capacityFull(person, dates, reqs) {
+  const grp = capGroup(person['Tracker Role']); const tr = await loadTracker(); const mine = new Set(nameKeys(person)); const per = {};
+  const add = (d, n) => { if (n && !mine.has(n)) (per[d] = per[d] || new Set()).add(n); };
+  tr.items.forEach(x => { if (x.date && dates.includes(x.date) && !x.cancelled && (x.approved || x.pending) && !/cancell/i.test(x.type) && capGroup(x.role).key === grp.key) add(x.date, x.n); });
+  reqs.forEach(r => { if (/^Pending/.test(r.Status) && r.Email !== person.Email && capGroup(r['Tracker Role']).key === grp.key) r.dateList.forEach(d => { if (dates.includes(d)) add(d, norm(r.Name)); }); });
+  return { group: grp, full: dates.filter(d => (per[d] ? per[d].size : 0) >= grp.cap).map(d => ({ date: d, off: per[d].size, cap: grp.cap })) };
+}
 async function doRequest(u, acc, b) {
   const target = normEmail(b.email || u.email); const person = acc.rows.find(r => r.Email === target); if (!person) bad('Person not found.');
   if (target !== u.email && !canRaiseForOthers(u)) deny('You can only request leave for yourself.');
@@ -318,7 +337,19 @@ async function doRequest(u, acc, b) {
   const t = await loadRequestsRaw();
   if (t.rows.some(r => r.Email === target && /^Pending|^Approved/.test(r.Status) && r.dateList.some(d => dates.includes(d)))) bad('There is already a request covering one of these days.');
   if (type === 'Holiday') { const bal = await ptoLeft(person, t.rows); if (bal && dates.length > bal.left) bad(`Not enough PTO balance: ${person['Full Name']} has ${plural(Math.max(0, bal.left), 'day')} left${bal.pending ? ` (after ${plural(bal.pending, 'day')} already waiting for approval)` : ''}, and this request is for ${plural(dates.length, 'day')}.`); }
-  const row = { ID: uid('R'), 'Submitted At': new Date().toISOString(), Email: target, Name: person['Full Name'], 'Tracker Role': person['Tracker Role'], 'Leave Type': type, Dates: dates.join(', '), Days: dates.length, Reason: String(b.reason || '').slice(0, 300), 'Submitted By': u.email, Status: REPORTS_TO_GM.includes(person['Portal Role']) ? 'Pending GM' : 'Pending Manager', 'Written To Tracker': 'No' };
+  let exception = false, exNote = '';
+  if (['Holiday', 'UPL'].includes(type)) {
+    const cap = await capacityFull(person, dates, t.rows);
+    if (cap.full.length) {
+      const txt = cap.full.map(f => `${f.date} (${f.off} of ${f.cap} already off)`).join(', ');
+      if (!LEADS.includes(u.role)) { const e = new HttpError(409, `${cap.group.label} are at capacity on ${txt}. Please pick other days.`); e.capacity = { blocked: true, ...cap }; throw e; }
+      if (b.check) return { ok: true, check: true, exception: true, blocked: false, ...cap };
+      if (b.exception !== true) { const e = new HttpError(409, `${cap.group.label} are at capacity on ${txt}. This can be sent as an exception request.`); e.capacity = { needsException: true, ...cap }; throw e; }
+      exception = true; exNote = `Over capacity (${cap.group.label}, max ${cap.group.cap}): ${txt}`;
+    }
+    if (b.check) return { ok: true, check: true, exception: false, blocked: false, ...cap };
+  } else if (b.check) return { ok: true, check: true, exception: false, blocked: false, full: [] };
+  const row = { ID: uid('R'), 'Submitted At': new Date().toISOString(), Email: target, Name: person['Full Name'], 'Tracker Role': person['Tracker Role'], 'Leave Type': type, Dates: dates.join(', '), Days: dates.length, Reason: String(b.reason || '').slice(0, 300), 'Submitted By': u.email, Status: (exception || REPORTS_TO_GM.includes(person['Portal Role'])) ? 'Pending GM' : 'Pending Manager', 'Written To Tracker': 'No', Exception: exception ? 'Yes' : '', 'Exception Note': exNote };
   await addRow(URLS.portal, T.req, rowFor(t.headers, row));
   return { ok: true, id: row.ID };
 }
@@ -824,6 +855,6 @@ export default async function handler(req, res) {
     return res.status(200).json(out);
   } catch (e) {
     const status = e.status || 500; if (status >= 500) console.error(e);
-    return res.status(status).json({ error: e.message || 'Server error' });
+    return res.status(status).json({ error: e.message || 'Server error', ...(e.capacity ? { capacity: e.capacity } : {}) });
   }
 }
