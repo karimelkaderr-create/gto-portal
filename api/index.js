@@ -13,6 +13,7 @@ const URLS = {
   portal: process.env.PORTAL_DATA_URL || 'https://inhouseworlduk-my.sharepoint.com/personal/opsportal_gto_org_uk/Documents/GTO Portal Data.xlsx',
   tracker: process.env.TRACKER_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/karim_abdelkader_gto_org_uk/IQAGYUtqR1vLSKqP0FlZ6RATAdBiU8BgwfIHE4l4MyEuylk',
   rota: process.env.ROTA_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCsgxuG2GMfQrdxchuLp-g-AUXcRe-tUdm0up6CarphlSA',
+  credits: process.env.CREDITS_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCAIRDbCANzQYGu3vQA99zVAXuw_Brrgq6CWaW3YbmRRCU',
   kb: process.env.KB_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCj174EGyAtQ6clqACoLu_yAaSPnXTVoMmSdINHGakVWRU',
 };
 const AI_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -792,6 +793,70 @@ async function askClaude(u, msgs, kb, ups) {
   return { answer: text, refs, conf: 0.9 };
 }
 
+
+/* ---------------- Client credits: read-only lookup from the "Balance" sheet ---------------- */
+const CREDITS_SHEET = 'Balance';
+const sNorm = s => String(s ?? '').replace(/\u00a0|\u202f/g, ' ').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff ]+/g, ' ').replace(/\s+/g, ' ').trim();
+const digitsOf = s => String(s ?? '').replace(/\D+/g, '');
+const serialIso = n => { const d = new Date(Math.round((n - 25569) * 864e5)); return isNaN(d) ? '' : d.toISOString().slice(0, 10); };
+function parseCreditText(raw) {
+  const t = String(raw || '').trim(); let title = t, issued = '', notice = '';
+  const m = t.search(/[\[(]/); if (m > 0) title = t.slice(0, m).trim();
+  for (const part of t.matchAll(/[\[(]([^\])]*)[\])]/g)) {
+    const x = part[1].trim();
+    if (/notice/i.test(x)) notice = x.replace(/\s*notice\s*$/i, '').trim();
+    else if (/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/.test(x)) issued = x;
+  }
+  return { title: title || t, issued, notice };
+}
+function parseCredits(r) {
+  const text = r.text || [], vals = r.values || [];
+  let h = -1; for (let i = 0; i < Math.min(40, text.length); i++) if (text[i].some(c => /balance/i.test(c)) && text[i].filter(c => String(c).trim()).length >= 3) { h = i; break; }
+  const head = h >= 0 ? text[h].map(c => String(c).trim()) : [];
+  const find = (re, fallback) => { const i = head.findIndex(c => re.test(c)); return i >= 0 ? i : fallback; };
+  const cName = find(/client|customer|name/i, 0), cNum = find(/number|phone|mobile|contact|msisdn|\bid\b/i, 1), cCred = find(/credit|offer|voucher|description|product|promo|card/i, 2), cDate = find(/date|activation|expir|valid/i, 3), cBal = find(/balance|amount|value/i, 4);
+  const clients = []; let cur = null;
+  for (let i = h + 1; i < text.length; i++) {
+    const t = text[i].map(c => String(c ?? '').trim()); const name = t[cName], num = t[cNum], cred = t[cCred], bal = t[cBal];
+    if (name) { const id = (name.match(/\(([^)]*)\)\s*$/) || [])[1] || ''; cur = { name: name.replace(/\s*\([^)]*\)\s*$/, '').trim(), id: id.trim(), number: num || '', credits: [] }; cur.search = sNorm(cur.name + ' ' + cur.id); cur.digits = digitsOf(cur.number); clients.push(cur); }
+    else if (cur && num && !cur.number) { cur.number = num; cur.digits = digitsOf(num); }
+    if (cur && cred) {
+      const raw = vals[i] ? vals[i][cDate] : ''; const dateText = t[cDate];
+      const date = typeof raw === 'number' && raw > 20000 ? serialIso(raw) : (() => { const d = new Date(String(dateText).replace(/^[A-Za-z]+,\s*/, '')); return isNaN(d) ? '' : serialIso(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5 + 25569); })();
+      const bn = vals[i] && typeof vals[i][cBal] === 'number' ? vals[i][cBal] : parseFloat(String(bal).replace(/,/g, ''));
+      cur.credits.push({ ...parseCreditText(cred), raw: cred, date, dateText, balance: isNaN(bn) ? bal : bn, balanceText: bal });
+    }
+  }
+  return { clients, dateLabel: (head[cDate] || '').trim() || 'Date', balanceLabel: (head[cBal] || '').trim() || 'Balance', foundHeader: h >= 0 };
+}
+let creditsMemo = null;
+async function loadCredits() {
+  if (creditsMemo && Date.now() - creditsMemo.at < 60e3) return creditsMemo.v;
+  let r; try { const b = await book(URLS.credits); r = await g('GET', `${b}/worksheets('${CREDITS_SHEET}')/usedRange(valuesOnly=true)?$select=values,text`); }
+  catch (e) { throw new HttpError(502, `The client credits sheet couldn't be read (${e.message}). Check that the portal account can open it and that the tab is called "${CREDITS_SHEET}".`); }
+  const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v }; return v;
+}
+async function readCredits(u, q) {
+  const data = await loadCredits(); const qs = sNorm(q), qd = digitsOf(q);
+  if (qs.length < 2 && qd.length < 4) return { clients: [], hint: 'Type at least 2 letters of the name, or 4 digits of the number.', updatedAt: data.at, dateLabel: data.dateLabel, balanceLabel: data.balanceLabel };
+  const toks = qs.split(' ').filter(Boolean);
+  let hit = data.clients.filter(c => (toks.length && toks.every(t => c.search.includes(t))) || (qd.length >= 4 && c.digits.includes(qd)));
+  hit.sort((a, b) => (b.search.startsWith(qs) - a.search.startsWith(qs)) || a.name.localeCompare(b.name));
+  const total = hit.length; hit = hit.slice(0, 15).map(({ search, digits, ...c }) => c);
+  return { clients: hit, total, updatedAt: data.at, dateLabel: data.dateLabel, balanceLabel: data.balanceLabel };
+}
+const CREDITLOG_HEADERS = ['ID', 'Viewed At', 'Email', 'Name', 'Role', 'Client', 'Client ID'];
+async function doCreditView(u, b) {
+  try { await ensureTable(URLS.portal, 'Credit Lookups', 'tblCreditLog', CREDITLOG_HEADERS); await addRow(URLS.portal, 'tblCreditLog', [uid('V'), new Date().toISOString(), u.email, u.name, u.role, String(b.name || '').slice(0, 120), String(b.id || '').slice(0, 40)]); }
+  catch (e) { console.error('credit log', e.message); }
+  return { ok: true };
+}
+async function readCreditLog(u) {
+  if (!isMgr(u)) deny();
+  if (!(await tableExists(URLS.portal, 'tblCreditLog'))) return { rows: [] };
+  const t = await table(URLS.portal, 'tblCreditLog'); return { rows: t.rows.filter(r => r.ID).map(r => ({ ...r, 'Viewed At': tsString(r['Viewed At']) })).reverse().slice(0, 100) };
+}
+
 /* ---------------- one-time setup for the opsportal account ---------------- */
 function base(req) { return `https://${req.headers['x-forwarded-host'] || req.headers.host}`; }
 async function setup(req, res) {
@@ -848,6 +913,9 @@ export default async function handler(req, res) {
       case 'update': out = await doUpdate(u, b); break;
       case 'ask': out = await doAsk(u, b); break;
       case 'asklog': out = await readAskLog(u); break;
+      case 'credits': out = await readCredits(u, String(req.query.q || '')); break;
+      case 'creditview': out = await doCreditView(u, b); break;
+      case 'creditlog': out = await readCreditLog(u); break;
       default: throw new HttpError(404, 'Unknown request.');
     }
     ({ att: ['att'], req: ['req'], decide: ['req', 'tracker'], cancel: ['req'], retry: ['req', 'tracker'], swap: ['swaps'], swapdecide: ['swaps'], swapcancel: ['swaps'], access: ['access'], update: ['updates'], kbedit: ['kbedits'] }[route] || []).forEach(k => forget(k));

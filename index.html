@@ -216,6 +216,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 /* ---------- Update notification ---------- */
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
 .upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
+.credit-card{background:#fff;color:#14171c;border-radius:18px;padding:26px 28px;max-width:860px;box-shadow:0 10px 40px rgba(0,0,0,.35)}.credit-card .cc-head{display:flex;gap:16px;align-items:center;padding-bottom:16px;border-bottom:3px solid #c9a24a}.credit-card .cc-head img{width:54px;height:54px;border-radius:50%;object-fit:cover;background:#0b0d11}.credit-card h3{margin:0;font-size:22px;color:#14171c}.credit-card .cc-head p{margin:4px 0 0;display:flex;gap:10px;flex-wrap:wrap}.credit-card .cc-head span{background:#f2ecdc;color:#5b4713;border-radius:999px;padding:3px 12px;font-size:13.5px;font-weight:600}.credit-card table{width:100%;border-collapse:collapse;margin-top:6px}.credit-card th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6a7078;padding:12px 10px;border-bottom:1px solid #e3e5e8}.credit-card td{padding:13px 10px;border-bottom:1px solid #eceef0;font-size:15px;color:#14171c;vertical-align:top}.credit-card .num{text-align:right;white-space:nowrap}.credit-card td.num b{font-size:18px}.credit-card .cr-t small{display:block;color:#6a7078;font-size:12.5px;margin-top:2px}.credit-card .cr-past{color:#b3261e;font-weight:600}.credit-card .cr-none{color:#9aa0a8}.credit-card .cc-foot{margin-top:14px;font-size:12px;color:#6a7078}.cr-list{display:flex;flex-direction:column;gap:6px}.cr-row{display:grid;grid-template-columns:2fr 1fr 1.3fr auto;gap:12px;align-items:center;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line,#2a2e36);background:transparent;color:inherit;cursor:pointer;font:inherit}.cr-row:hover{border-color:var(--gold,#c9a24a);background:rgba(201,162,74,.08)}@media (max-width:820px){.cr-row{grid-template-columns:1fr 1fr}.credit-card{padding:18px}}
 .opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
 @keyframes upin{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}@keyframes upring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){.upnote,.upnote .ic{animation:none}}
@@ -936,6 +937,7 @@ async function boot(){
 /* ============================ Rendering shell ============================ */
 const ICON = {
   home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+  credits:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg>',
   appr:'<svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>',
   act:'<svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14 2.5-7H21"/></svg>',
   att:'<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>',
@@ -946,7 +948,7 @@ const ICON = {
   admin:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.9 2.6 2.6 3 5.2"/></svg>',
   out:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h11"/></svg>'
 };
-const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], appr:['Approvals','Leave and swap requests waiting for your decision.'],act:['Agent activity','Day-by-day activity, live status, shift-start attendance check and hours reports.'], leave:['Leaves','Your balance, leave requests and who is off.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
+const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], credits:['Client credits','Look up a client to see their credits, notice period and balance.'],appr:['Approvals','Leave and swap requests waiting for your decision.'],act:['Agent activity','Day-by-day activity, live status, shift-start attendance check and hours reports.'], leave:['Leaves','Your balance, leave requests and who is off.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
 const hasAppr = u => ['Team Leader','Duty Manager','General Manager'].includes(u.role);
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
@@ -958,7 +960,7 @@ async function render(){
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
   const swapsWaiting = (await swapQueue()).length;
-  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['act','Agent activity'],...(hasAppr(u)?[['appr','Approvals']]:[]),['leave','Leaves'],['sched','Schedule'],['quality','Quality'],['kb','Updates']];
+  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['credits','Client credits'],['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['act','Agent activity'],...(hasAppr(u)?[['appr','Approvals']]:[]),['leave','Leaves'],['sched','Schedule'],['credits','Client credits'],['quality','Quality'],['kb','Updates']];
   if (u.admin) tabs.push(['admin','Access']);
   const hour=new Date().getHours(); const greet = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const [title, sub] = S.tab==='home' ? [`${greet}, ${esc(String(u.name).split(/\s+/)[0])}`, isMgr(u)?'Here is what needs your attention today.':'Here is your day.'] : PAGES[S.tab];
@@ -987,7 +989,7 @@ async function render(){
   startUpdatePoll(); startOpsAlerts();
   if (agent) await mountStatusBar();
   try {
-    await ({home:viewHome, att:viewAttendance, act:viewActivity, appr:viewApprovals, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
+    await ({home:viewHome, att:viewAttendance, act:viewActivity, appr:viewApprovals, credits:viewCredits, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
   } catch(e){ console.error(e); if (S.renderId !== myRender) return; /* a newer page load replaced this one */ $('#view').innerHTML = `<div class="alert bad">This page didn't load: ${esc(e.message)}. Refresh to try again.</div>`; }
 }
 
@@ -1676,6 +1678,50 @@ async function viewApprovals(){
   if (!queue.length){ body.innerHTML=`<div class="card"><p class="muted" style="margin:0">No leave requests are waiting for you.</p></div>`; return; }
   body.innerHTML = `${ex.length?`<div class="card sec" style="border-color:var(--bad)"><h2>Exception requests <span class="muted" style="font-weight:500">${ex.length}</span></h2><p class="muted" style="margin:0 0 10px">Raised over the holiday capacity limit and marked as pre-approved. These are not normal requests.</p><div id="qex"></div></div>`:''}${norm_.length?`<div class="card sec"><h2>Leave requests <span class="muted" style="font-weight:500">${norm_.length}</span></h2><div id="qnorm"></div></div>`:''}`;
   if (ex.length) await paintQueue(ex,'#qex'); if (norm_.length) await paintQueue(norm_,'#qnorm');
+}
+
+/* ============================ Client credits ============================ */
+const fmtMoney = n => typeof n==='number' ? n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}) : String(n||'—');
+function loadHtml2Canvas(){
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload=()=>res(window.html2canvas); s.onerror=()=>rej(new Error('Could not load the image tool')); document.head.appendChild(s); });
+}
+function creditCard(c, meta){
+  const today=dkey(new Date());
+  const rows=c.credits.map(x=>`<tr><td class="cr-t"><b>${esc(x.title)}</b>${x.issued?`<small>Issued ${esc(x.issued)}</small>`:''}</td><td>${x.notice?esc(x.notice):'<span class="cr-none">—</span>'}</td><td>${x.date?fromKey(x.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):esc(x.dateText||'—')}</td><td class="num"><b>${fmtMoney(x.balance)}</b></td></tr>`).join('');
+  return `<div class="credit-card" id="ccard"><div class="cc-head"><img src="${LOGO}" alt=""><div><h3>${esc(c.name)}</h3><p>${c.id?`<span>${esc(c.id)}</span>`:''}${c.number?`<span>${esc(c.number)}</span>`:''}</p></div></div>
+    ${c.credits.length?`<table><thead><tr><th>Credit</th><th>Notice period</th><th>${esc(meta.dateLabel)}</th><th class="num">${esc(meta.balanceLabel)}</th></tr></thead><tbody>${rows}</tbody></table>`:'<p class="cr-none" style="padding:14px 0">No credits listed for this client.</p>'}
+    <div class="cc-foot">Source: Client Credits sheet · updated ${esc(new Date(meta.updatedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · viewed by ${esc(S.me.name)}</div></div>`;
+}
+async function viewCredits(){
+  const v=$('#view'); const u=S.me;
+  if (!(S.D instanceof ApiData)){ v.innerHTML='<div class="card"><p class="muted" style="margin:0">Client credits reads a live Excel sheet, so it is not available in demo mode.</p></div>'; return; }
+  v.innerHTML=`<div class="card"><label class="f" for="cq">Search by client name, client ID or phone number</label><input id="cq" class="i" autocomplete="off" placeholder="e.g. Mohamed Mamdouh, E1500 or 0110…" style="font-size:16px;padding:14px 16px"><div id="cres" style="margin-top:14px"><p class="muted" style="margin:0">Type at least 2 letters of the name, or 4 digits of the number.</p></div></div>
+    <div id="cview"></div>${isMgr(u)?`<div class="card sec"><div class="row"><h2 style="margin:0">Recent lookups</h2><span class="spacer"></span><button class="btn sm" id="clogbtn">Show</button></div><div id="clog"></div></div>`:''}`;
+  let seq=0, last=null; const input=$('#cq'); input.focus();
+  const show=async(c,meta)=>{
+    $('#cview').innerHTML=`<div class="sec">${creditCard(c,meta)}<div class="row" style="margin-top:12px"><button class="btn primary" id="ccopy">Copy as image</button><button class="btn" id="cdl">Download image</button></div></div>`;
+    S.D.call('POST','creditview',{name:c.name,id:c.id}).catch(()=>{});
+    const grab=async()=>{ const h2c=await loadHtml2Canvas(); return h2c($('#ccard'),{scale:2,backgroundColor:null,useCORS:true}); };
+    $('#cdl').onclick=async()=>{ try{ const cv=await grab(); const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download=`credits-${(c.id||c.name).replace(/[^\w-]+/g,'_')}.png`; a.click(); }catch(e){ alertBox(e); } };
+    $('#ccopy').onclick=async()=>{ try{ const cv=await grab(); const blob=await new Promise(r=>cv.toBlob(r,'image/png')); await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); toast('Image copied – paste it into your chat'); }catch(e){ toast('Could not copy – use Download image instead'); } };
+    $('#cview').scrollIntoView({behavior:'smooth',block:'start'});
+  };
+  const run=async()=>{
+    const q=input.value.trim(); const my=++seq;
+    if (q.length<2 && (q.replace(/\D/g,'').length<4)){ $('#cres').innerHTML='<p class="muted" style="margin:0">Type at least 2 letters of the name, or 4 digits of the number.</p>'; $('#cview').innerHTML=''; return; }
+    $('#cres').innerHTML='<p class="muted" style="margin:0">Searching…</p>';
+    try{
+      const r=await S.D.call('GET','credits',null,{q}); if (my!==seq) return; last=r;
+      if (!r.clients.length){ $('#cres').innerHTML='<p class="muted" style="margin:0">No client found. Check the spelling or try the phone number.</p>'; $('#cview').innerHTML=''; return; }
+      if (r.clients.length===1){ $('#cres').innerHTML=''; return show(r.clients[0], r); }
+      $('#cview').innerHTML='';
+      $('#cres').innerHTML=`<div class="cr-list">${r.clients.map((c,i)=>`<button class="cr-row" data-ci="${i}"><b>${esc(c.name)}</b><span>${esc(c.id)}</span><span>${esc(c.number)}</span><span class="muted">${c.credits.length} credit${c.credits.length===1?'':'s'}</span></button>`).join('')}</div>${r.total>r.clients.length?`<p class="muted" style="margin:8px 0 0">Showing the first ${r.clients.length} of ${r.total}. Type more of the name to narrow it down.</p>`:''}`;
+      document.querySelectorAll('[data-ci]').forEach(b=>b.onclick=()=>show(last.clients[+b.dataset.ci], last));
+    }catch(e){ if (my===seq) $('#cres').innerHTML=`<div class="alert bad" style="margin:0">${esc(e.message)}</div>`; }
+  };
+  input.oninput=()=>{ clearTimeout(window._cq); window._cq=setTimeout(run,350); };
+  const lb=$('#clogbtn'); if (lb) lb.onclick=async()=>{ lb.disabled=true; try{ const r=await S.D.call('GET','creditlog'); $('#clog').innerHTML=r.rows.length?`<div class="tablewrap" style="max-height:320px;margin-top:10px"><table><tr><th>When</th><th>Agent</th><th>Role</th><th>Client</th></tr>${r.rows.map(x=>`<tr><td>${esc(new Date(x['Viewed At']).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</td><td>${esc(x.Name)}</td><td>${esc(x.Role)}</td><td>${esc(x.Client)} ${esc(x['Client ID'])}</td></tr>`).join('')}</table></div>`:'<p class="muted" style="margin:10px 0 0">No lookups yet.</p>'; lb.remove(); }catch(e){ alertBox(e); lb.disabled=false; } };
 }
 
 /* ============================ Quality ============================ */
