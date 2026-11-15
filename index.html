@@ -1363,6 +1363,7 @@ async function approvalQueue(){
     if (r.Email===u.email) return false;
     if (r.Status==='Pending Manager'){
       if (r['Submitted By']===u.email) return false;
+      if (['Team Leader','Duty Manager','HR'].includes((acc.find(x=>x.Email===r.Email)||{})['Portal Role'])) return u.role==='General Manager';
       return u.role==='Duty Manager' || (u.role==='Team Leader' && mgrOf(r.Email)===u.email);
     }
     if (r.Status==='Pending GM') return u.role==='General Manager';
@@ -1451,7 +1452,7 @@ async function reqForm(){
     if (dupe) return toast('There is already a request covering one of these days');
     $('#rsend').disabled=true;
     try{
-      await S.D.addRequest({ ID:uid('R'), 'Submitted At':new Date().toISOString(), Email:target.Email, Name:target['Full Name'], 'Tracker Role':target['Tracker Role'], 'Leave Type':$('#rtype').value, Dates:sel.join(', '), Days:sel.length, Reason:$('#rreason').value.trim(), 'Submitted By':u.email, Status:'Pending Manager', 'Written To Tracker':'No' });
+      await S.D.addRequest({ ID:uid('R'), 'Submitted At':new Date().toISOString(), Email:target.Email, Name:target['Full Name'], 'Tracker Role':target['Tracker Role'], 'Leave Type':$('#rtype').value, Dates:sel.join(', '), Days:sel.length, Reason:$('#rreason').value.trim(), 'Submitted By':u.email, Status:['Team Leader','Duty Manager','HR'].includes(target['Portal Role'])?'Pending GM':'Pending Manager', 'Written To Tracker':'No' });
       toast('Request sent'); render();
     }catch(e){ alertBox(e); $('#rsend').disabled=false; }
   };

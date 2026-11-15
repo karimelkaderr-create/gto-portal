@@ -21,6 +21,8 @@ const TRACKER_TABLE = process.env.TRACKER_TABLE || 'Table1';
 const BALANCE_SHEET = process.env.BALANCE_SHEET || 'Balance';
 const T = { access: 'tblAccess', att: 'tblAttendance', req: 'tblRequests', set: 'tblSettings', swap: 'tblSwaps' };
 const ROLES = ['Agent', 'Team Leader', 'Duty Manager', 'General Manager', 'HR', 'Quality'];
+// people who report straight to the General Manager: their leave skips the manager step
+const REPORTS_TO_GM = ['Team Leader', 'Duty Manager', 'HR'];
 const MANAGER_ROLES = ['Team Leader', 'Duty Manager', 'General Manager', 'HR'];
 // '.default' = every Graph permission the admin has approved for the app (Files.ReadWrite.All, User.Read)
 const SCOPE = 'offline_access openid profile https://graph.microsoft.com/.default';
@@ -316,7 +318,7 @@ async function doRequest(u, acc, b) {
   const t = await loadRequestsRaw();
   if (t.rows.some(r => r.Email === target && /^Pending|^Approved/.test(r.Status) && r.dateList.some(d => dates.includes(d)))) bad('There is already a request covering one of these days.');
   if (type === 'Holiday') { const bal = await ptoLeft(person, t.rows); if (bal && dates.length > bal.left) bad(`Not enough PTO balance: ${person['Full Name']} has ${plural(Math.max(0, bal.left), 'day')} left${bal.pending ? ` (after ${plural(bal.pending, 'day')} already waiting for approval)` : ''}, and this request is for ${plural(dates.length, 'day')}.`); }
-  const row = { ID: uid('R'), 'Submitted At': new Date().toISOString(), Email: target, Name: person['Full Name'], 'Tracker Role': person['Tracker Role'], 'Leave Type': type, Dates: dates.join(', '), Days: dates.length, Reason: String(b.reason || '').slice(0, 300), 'Submitted By': u.email, Status: 'Pending Manager', 'Written To Tracker': 'No' };
+  const row = { ID: uid('R'), 'Submitted At': new Date().toISOString(), Email: target, Name: person['Full Name'], 'Tracker Role': person['Tracker Role'], 'Leave Type': type, Dates: dates.join(', '), Days: dates.length, Reason: String(b.reason || '').slice(0, 300), 'Submitted By': u.email, Status: REPORTS_TO_GM.includes(person['Portal Role']) ? 'Pending GM' : 'Pending Manager', 'Written To Tracker': 'No' };
   await addRow(URLS.portal, T.req, rowFor(t.headers, row));
   return { ok: true, id: row.ID };
 }
@@ -336,6 +338,15 @@ async function doDecide(u, acc, b) {
   const t = await loadRequestsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Request not found.');
   if (r.Email === u.email) deny("You can't approve your own request.");
   const ok = !!b.ok, note = String(b.note || '').slice(0, 300), now = new Date().toISOString();
+  if (r.Status === 'Pending Manager' && REPORTS_TO_GM.includes((acc.rows.find(x => x.Email === r.Email) || {})['Portal Role'])) {
+    // older request from a leader / Duty Manager / HR: only the General Manager decides, and that is the final approval
+    if (u.role !== 'General Manager') deny('This person reports to the General Manager, so only the General Manager can approve it.');
+    if (!ok) { await updateReq(t, r, { Status: 'Rejected', 'Stage 2 By': u.email, 'Stage 2 At': now, 'Stage 2 Note': note }); return { status: 'Rejected' }; }
+    if (r['Leave Type'] === 'Holiday') { const p = acc.rows.find(x => x.Email === r.Email); const bal = p && await ptoLeft(p, t.rows, r.ID); if (bal && r.dateList.length > bal.left) bad(`Can't approve: ${r.Name} only has ${plural(Math.max(0, bal.left), 'PTO day')} left. Reject it so they can request fewer days.`); }
+    await updateReq(t, r, { Status: 'Approved', 'Stage 2 By': u.email, 'Stage 2 At': now, 'Stage 2 Note': note });
+    try { await writeTracker(t, r, acc); } catch (e) { throw new HttpError(502, 'Approved, but writing to the Leaves Tracker failed: ' + e.message + '. Use "Retry tracker write".'); }
+    return { status: 'Approved' };
+  }
   if (r.Status === 'Pending Manager') {
     const mgr = (acc.rows.find(x => x.Email === r.Email) || {})['Manager Email'];
     if (r['Submitted By'] === u.email) deny("You raised this request, so another manager has to approve it.");
