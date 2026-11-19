@@ -1556,7 +1556,8 @@ async function viewSchedule(){
   const base = addDays(mondayOf(new Date()), S.schedOffset*7);
   const rota = await S.D.rotaFor(addDays(base,1));
   const days=[0,1,2,3,4,5,6].map(i=>addDays(base,i)); const tk=dkey(new Date());
-  const head = `<div class="row" style="margin-bottom:14px"><button class="btn sm" id="sp" aria-label="Previous week">‹</button><b>Week of ${base.toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</b><button class="btn sm" id="sn" aria-label="Next week">›</button>${rota?`<span class="muted">Rota tab ${esc(rota.week.name)}</span>`:''}</div>`;
+  const weeks = (await S.D.rotaWeeks()) || [];
+  const head = `<div class="row" style="margin-bottom:14px"><button class="btn sm" id="sp" aria-label="Previous week">‹</button><b>Week of ${base.toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</b><button class="btn sm" id="sn" aria-label="Next week">›</button>${weeks.length?`<select id="swk" class="i" style="width:auto" aria-label="Rota week">${weeks.map(w=>`<option value="${esc(w.name)}" ${rota&&rota.week.name===w.name?'selected':''}>${esc(w.name)}</option>`).join('')}${rota?'':'<option value="" selected>No rota for this week</option>'}</select>`:''}</div>`;
   let html = `<div class="card">${head}<h2>My shifts</h2><div id="mysched"></div></div>`;
   html += `<div class="grid g2 sec"><div class="card"><h2>Swap a shift</h2><div id="swform"></div></div><div class="card"><h2>My swaps</h2><div id="swmine"></div></div></div>`;
   if (isMgr(u)) html += `<div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Full rota</h2><span class="spacer"></span><select id="sdept" class="i" style="width:auto" aria-label="Department"><option value="">All departments</option></select><input id="sq" class="i" style="width:220px" placeholder="Search name or block"></div><div class="tablewrap" id="fullrota"></div></div>`;
@@ -1582,7 +1583,8 @@ async function viewSchedule(){
     paint(); $('#sq').oninput=paint; sel.onchange=paint;
   }
 }
-function wireSched(){ $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
+function wireSched(){ const wk=$('#swk'); if (wk) wk.onchange=async()=>{ const w=((await S.D.rotaWeeks())||[]).find(x=>x.name===wk.value); if (!w) return; S.schedOffset=Math.round((mondayOf(w.start)-mondayOf(new Date()))/(7*864e5)); viewSchedule(); };
+  $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
 async function teammates(u){
   const dept = x=>norm(x.Team);
   return (await S.D.people()).filter(r=>r.Email && r.Email!==u.email && !/^no$/i.test(String(r.Active||'').trim()) && dept(u.row) && dept(r)===dept(u.row) && String(r['Portal Role']).trim()===u.role).sort((a,b)=>a['Full Name']<b['Full Name']?-1:1);
