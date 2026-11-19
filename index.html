@@ -1787,6 +1787,32 @@ async function qualityData(force){
   return { evals, disputes:d.disputes.filter(x=>ids.has(x['Eval ID'])||all), canDispute:u.role!=='HR', canReview:['Team Leader','Duty Manager','General Manager'].includes(u.role), canRespond: qa, quality: qa };
 }
 async function viewQuality(){
+  S.qtab = S.qtab||'evals';
+  const bar = () => `<div class="kb-row" role="tablist" aria-label="Quality" id="qtabs" style="margin:0 0 14px"><button class="pill ${S.qtab==='evals'?'on':''}" data-qt="evals" role="tab">Evaluations</button><button class="pill ${S.qtab==='guides'?'on':''}" data-qt="guides" role="tab">Playbook and guides</button></div>`;
+  if (S.qtab==='guides') await viewQaLib(); else await viewQualityEvals();
+  const v=$('#view'); v.insertAdjacentHTML('afterbegin', bar());
+  document.querySelectorAll('#qtabs [data-qt]').forEach(b=>b.onclick=()=>{ S.qtab=b.dataset.qt; viewQuality(); });
+}
+async function viewQaLib(){
+  const v=$('#view'); v.innerHTML='<div class="card"><p class="muted" style="margin:0">Loading…</p></div>';
+  let lib; try{ lib = await S.D.call('GET','qalib'); }catch(e){ v.innerHTML=`<div class="alert bad">The guides couldn't be loaded: ${esc(e.message)}</div>`; return; }
+  const F = S.qa = S.qa||{ q:'' };
+  const fmtSz = n => n>1e6 ? (n/1e6).toFixed(1)+' MB' : Math.round(n/1e3)+' KB';
+  v.innerHTML = `<div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Playbook and guides</h2><span class="spacer"></span><input id="qaq" class="i" style="width:240px" placeholder="Search the guides" value="${esc(F.q)}">${lib.canManage?'<button class="btn primary" id="qaup">Add a guide</button><input type="file" id="qafile" accept=".docx,.pptx" hidden>':''}</div>
+    <p class="muted" style="margin:0 0 12px;font-size:13.5px">GTO Assist uses these guides when it advises on offers.</p><div id="qalist"></div></div>`;
+  const paint=()=>{ F.q=$('#qaq').value; const q=norm(F.q);
+    const docs=lib.docs.map(d=>({ d, secs:d.sections.map((sc,i)=>({sc,i})).filter(x=>!q||norm(x.sc.heading+' '+x.sc.text+' '+d.title).includes(q)) })).filter(x=>x.secs.length);
+    $('#qalist').innerHTML = docs.length ? docs.map(({d,secs})=>`<details class="card" style="margin:0 0 10px" ${q?'open':''}><summary style="cursor:pointer"><b>${esc(d.title)}</b> <span class="muted" style="font-size:13px">${esc(d.kind)} · ${secs.length}${q?' matching':''} ${secs.length===1?'section':'sections'} · updated ${new Date(d.at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span></summary>
+      <div class="row" style="margin:10px 0"><button class="btn sm" data-dl="${d.id}">Download original</button>${lib.canManage?`<button class="btn sm" data-rm="${d.id}">Remove</button>`:''}</div>
+      ${secs.map(({sc})=>`<details style="margin:6px 0" ${q?'open':''}><summary style="cursor:pointer">${esc(sc.heading)}</summary><div style="white-space:pre-wrap;margin:8px 0 8px 14px;font-size:14.5px;line-height:1.55">${esc(sc.text)}</div></details>`).join('')}</details>`).join('') : `<p class="muted" style="margin:0">${lib.docs.length?'Nothing matches that search.':'No guides have been added yet.'}</p>`;
+    document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ const f=await S.D.call('GET','qafile',null,{id:b.dataset.dl}); const bin=atob(f.data), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([arr])); a.download=f.name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }catch(e){ alertBox(e); } b.disabled=false; });
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ if(!confirm('Remove this guide? GTO Assist will stop using it.')) return; try{ await S.D.call('POST','qadelete',{id:b.dataset.rm}); toast('Removed'); viewQuality(); }catch(e){ alertBox(e); } });
+  };
+  paint(); $('#qaq').oninput=paint;
+  const up=$('#qaup'); if (up){ up.onclick=()=>$('#qafile').click(); $('#qafile').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; if(f.size>3e6) return toast('That file is over 3 MB'); up.disabled=true; up.textContent='Uploading…';
+    try{ const buf=new Uint8Array(await f.arrayBuffer()); let bin=''; for(let i=0;i<buf.length;i+=8192) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+8192)); const r=await S.D.call('POST','qaupload',{ name:f.name, data:btoa(bin) }); toast(`${r.replaced?'Updated':'Added'}: ${r.sections} sections`); viewQuality(); }catch(err){ alertBox(err); up.disabled=false; up.textContent='Add a guide'; } }; }
+}
+async function viewQualityEvals(){
   const v=$('#view'); const u=S.me; let q;
   try { q = await qualityData(); } catch(e){ v.innerHTML = `<div class="alert bad">The quality file couldn't be loaded: ${esc(e.message)}</div>`; return; }
   S.qf = S.qf || { month:'', who:'', tl:'', q:'' }; const F=S.qf;

@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { buildIndex, answer as localAnswer } from './assist.js';
 import { readSheet } from '../lib/xlsx-lite.js';
+import { sectionsOf } from '../lib/doc-lite.js';
 const blob = () => globalThis.__blobMock || import('@vercel/blob');
 
 const CLIENT_ID = process.env.CLIENT_ID || 'b57c476e-4a3e-498c-a114-2aa2638997d0';
@@ -795,6 +796,49 @@ async function logQuestion(u, q, type) {
   try { await ensureTable(URLS.portal, 'Assistant Log', 'tblAskLog', ASKLOG_HEADERS); await addRow(URLS.portal, 'tblAskLog', [uid('Q'), new Date().toISOString(), u.email, u.name, q.slice(0, 500), type]); }
   catch (e) { console.error('ask log', e.message); }
 }
+/* ---------------- QA library: playbook and guides, kept in the private Blob store ---------------- */
+const QA_INDEX = 'qa/index.txt', QA_FILE = id => `qa/file-${id}.txt`;
+async function blobText(path) {
+  const { get } = await blob(); let r; try { r = await get(path, { access: 'private', useCache: false }); } catch (e) { return null; } if (!r) return null;
+  return r.stream ? await new Response(r.stream).text() : typeof r.text === 'function' ? await r.text() : String(r);
+}
+const loadQa = () => cached('qalib', 60e3, async () => { const t = await blobText(QA_INDEX); if (!t) return { docs: [] }; try { return dec(t); } catch (e) { return { docs: [] }; } });
+async function saveQa(lib) { const { put } = await blob(); await put(QA_INDEX, enc(lib), { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain' }); forget('qalib'); }
+const canManageQa = u => u.admin || isQuality(u) || ['Duty Manager', 'General Manager'].includes(u.role);
+async function readQaLib(u) { const lib = await loadQa(); return { canManage: canManageQa(u), docs: lib.docs.map(d => ({ id: d.id, title: d.title, file: d.file, kind: d.kind, by: d.by, at: d.at, size: d.size, sections: d.sections })) }; }
+async function doQaUpload(u, b) {
+  if (!canManageQa(u)) deny('Only the Quality team, Duty Managers, the GM and admins can add guides.');
+  const name = String(b.name || '').replace(/[^\w .()\-–]/g, '').slice(0, 120); if (!/\.(docx|pptx)$/i.test(name)) bad('Upload a Word (.docx) or PowerPoint (.pptx) file.');
+  const buf = Buffer.from(String(b.data || ''), 'base64'); if (buf.length < 500) bad('The file looks empty.'); if (buf.length > 3.2e6) bad('The file is over 3 MB. Please compress the images or split it.');
+  let sections; try { sections = sectionsOf(name, buf); } catch (e) { bad("This file couldn't be read: " + e.message); }
+  if (!sections.length) bad('No text was found in this file.');
+  const lib = await loadQa(); const title = String(b.title || '').trim().slice(0, 120) || name.replace(/\.(docx|pptx)$/i, '').replace(/[_]+/g, ' ');
+  const old = lib.docs.find(d => norm(d.title) === norm(title)); const id = old ? old.id : uid('G');
+  const doc = { id, title, file: name, kind: /pptx$/i.test(name) ? 'Slides' : 'Guide', by: u.name, at: new Date().toISOString(), size: buf.length, sections };
+  const { put } = await blob(); await put(QA_FILE(id), enc({ name, data: buf.toString('base64') }), { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain' });
+  lib.docs = old ? lib.docs.map(d => d.id === id ? doc : d) : [...lib.docs, doc]; await saveQa(lib); ixCache = null;
+  return { ok: true, id, sections: sections.length, replaced: !!old };
+}
+async function doQaDelete(u, b) {
+  if (!canManageQa(u)) deny(); const lib = await loadQa(); lib.docs = lib.docs.filter(d => d.id !== b.id); await saveQa(lib); return { ok: true };
+}
+async function readQaFile(u, id) {
+  const lib = await loadQa(); if (!lib.docs.some(d => d.id === id)) bad('Guide not found.');
+  const t = await blobText(QA_FILE(id)); if (!t) bad('The original file is not stored.'); return dec(t);
+}
+const QA_STOP = new Set('the and for with from that this what when how can you your are was were not any all has have had does did who why where which into out about then than them they will would should could please need needs just get got give say said ask asks client clients agent agents offer offers promo promotion'.split(' '));
+const qaTok = s => [...new Set(String(s || '').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].filter(t => !QA_STOP.has(t)).map(t => t.replace(/(ing|ed|es|s)$/, ''));
+function qaSearch(lib, query, max = 2) {
+  const q = qaTok(query); if (!q.length) return [];
+  const out = [];
+  for (const d of lib.docs) for (const sc of d.sections) {
+    const head = qaTok(sc.heading + ' ' + d.title), body = new Set(qaTok(sc.text));
+    let score = 0; for (const t of q) { if (head.includes(t)) score += 3; else if (body.has(t)) score += 1; }
+    if (score >= 4) out.push({ d, sc, score });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, max);
+}
+const qaSnippet = (sc, q, n = 420) => { const lines = sc.text.split('\n'); const qt = qaTok(q); const rank = lines.map((l, i) => [i, qaTok(l).filter(t => qt.includes(t)).length]).sort((a, b) => b[1] - a[1] || a[0] - b[0]); const pick = new Set(rank.filter(r => r[1] > 0).slice(0, 4).map(r => r[0])); if (!pick.size) lines.slice(0, 3).forEach((_, i) => pick.add(i)); let t = lines.filter((_, i) => pick.has(i)).map(l => '- ' + l.trim()).join('\n'); return t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t; };
 async function doAsk(u, b) {
   const now = Date.now(); askLog[u.email] = (askLog[u.email] || []).filter(t => now - t < 3600e3); if (askLog[u.email].length >= 200) throw new HttpError(429, 'You have asked a lot of questions this hour. Please try again shortly.'); askLog[u.email].push(now);
   const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 3000) })).filter(m => m.content);
@@ -805,21 +849,23 @@ async function doAsk(u, b) {
   // GTO Assist answers on its own; an AI key (optional) is only used for questions it isn't sure about
   if (local.conf < 0.5) await logQuestion(u, q, local.conf <= 0.1 ? 'Not found' : 'Partial');
   if (AI_KEY && local.conf < 0.6 && msgs.length) {
-    try { const ai = await askClaude(u, msgs, kb, ups); return { ...ai, engine: 'ai', item: local.item, follow: [] }; } catch (e) { console.error('AI fallback failed', e.message); }
+    try { const ai = await askClaude(u, msgs, kb, ups, await loadQa()); return { ...ai, engine: 'ai', item: local.item, follow: [] }; } catch (e) { console.error('AI fallback failed', e.message); }
   }
-  return { answer: local.answer, refs: local.refs, follow: local.follow, item: local.item, conf: local.conf, engine: 'local' };
+  let answer = local.answer, qa = [];
+  try { const lib = await loadQa(); const itemName = ((kb.items.find(i => i.id === local.item) || {}).name) || ''; qa = qaSearch(lib, q + ' ' + itemName); if (qa.length) answer += '\n\n**From the QA guides**\n' + qa.map(m => `**${m.d.title} › ${m.sc.heading}**\n${qaSnippet(m.sc, q)}`).join('\n\n'); } catch (e) { console.error('qa lookup', e.message); }
+  return { answer, refs: local.refs, follow: local.follow, item: local.item, conf: Math.max(local.conf, qa.length ? 0.6 : 0), engine: 'local', qa: qa.map(m => ({ doc: m.d.id, section: m.sc.heading })) };
 }
 async function readAskLog(u) {
   if (!(['Duty Manager', 'General Manager', 'Quality'].includes(u.role) || u.admin || yes(u.row['Quality Team']))) deny();
   if (!(await tableExists(URLS.portal, 'tblAskLog'))) return { rows: [] };
   const t = await table(URLS.portal, 'tblAskLog'); return { rows: t.rows.filter(r => r.ID).map(r => ({ ...r, 'Asked At': tsString(r['Asked At']) })).reverse().slice(0, 100) };
 }
-async function askClaude(u, msgs, kb, ups) {
+async function askClaude(u, msgs, kb, ups, qalib = { docs: [] }) {
   while (msgs.length && msgs[0].role !== 'user') msgs.shift();
   const updates = ups.slice(-30).map(r => `- ${String(r['Posted At']).slice(0, 10)} · ${r.Title}: ${r.Body}`).join('\n');
   const sys = [
     { type: 'text', text: `You are GTO Assist, the internal knowledge assistant for customer-service agents at GTO (Global Travel Organisation), a members' travel club. Answer ONLY from the knowledge base and team updates below; if the answer is not there, say so and suggest checking with the team leader or duty manager. Never invent percentages, dates, prices, links or rules. Be short: lead with the direct answer, then key conditions as bullets. Name the offer(s) used exactly as [[Offer name]]. Later entries are newer; if several versions share a name, use the newest and mention older ones. Say whether an offer is still on sale compared with today's date. Flag confidential / selected-members offers. Reply in the agent's language (English or Arabic).\n\nKNOWLEDGE BASE (${kb.items.length} entries, source: ${kb.source}):\n\n${kbText(kb.items)}`, cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: `Today is ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Cairo' })}. The agent asking is ${u.name} (${u.role}).\n\nRecent team updates:\n${updates || '(none)'}` }
+    { type: 'text', text: `Today is ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Cairo' })}. The agent asking is ${u.name} (${u.role}).\n\nRecent team updates:\n${updates || '(none)'}\n\nQA playbook and guides (follow these when advising on how to handle offers):\n${qaSearch(qalib, msgs.filter(m => m.role === 'user').slice(-2).map(m => m.content).join(' '), 5).map(m => `## ${m.d.title} › ${m.sc.heading}\n${m.sc.text.slice(0, 1500)}`).join('\n\n') || '(none matched)'}` }
   ];
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': AI_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: AI_MODEL, max_tokens: 1500, system: sys, messages: msgs }) });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error?.message || 'AI error ' + r.status);
@@ -1008,6 +1054,10 @@ export default async function handler(req, res) {
       case 'swapdecide': out = await doSwapUpdate(u, b, true); break;
       case 'swapcancel': out = await doSwapUpdate(u, b, false); break;
       case 'access': out = await doAccess(u, acc, b); break;
+      case 'qalib': out = await readQaLib(u); break;
+      case 'qaupload': out = await doQaUpload(u, b); break;
+      case 'qadelete': out = await doQaDelete(u, b); break;
+      case 'qafile': out = await readQaFile(u, String(req.query.id || '')); break;
       case 'rotaedit': out = await doRotaEdit(u, acc, b); break;
       case 'rotaeditclear': out = await doRotaEditClear(u, b); break;
       case 'quality': out = await readQuality(u, acc); break;
