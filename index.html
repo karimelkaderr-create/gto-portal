@@ -1559,7 +1559,7 @@ async function viewSchedule(){
   const head = `<div class="row" style="margin-bottom:14px"><button class="btn sm" id="sp" aria-label="Previous week">‹</button><b>Week of ${base.toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</b><button class="btn sm" id="sn" aria-label="Next week">›</button>${rota?`<span class="muted">Rota tab ${esc(rota.week.name)}</span>`:''}</div>`;
   let html = `<div class="card">${head}<h2>My shifts</h2><div id="mysched"></div></div>`;
   html += `<div class="grid g2 sec"><div class="card"><h2>Swap a shift</h2><div id="swform"></div></div><div class="card"><h2>My swaps</h2><div id="swmine"></div></div></div>`;
-  if (isMgr(u)) html += `<div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Full rota</h2><span class="spacer"></span><input id="sq" class="i" style="width:220px" placeholder="Search name or block"></div><div class="tablewrap" id="fullrota"></div></div>`;
+  if (isMgr(u)) html += `<div class="card sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Full rota</h2><span class="spacer"></span><select id="sdept" class="i" style="width:auto" aria-label="Department"><option value="">All departments</option></select><input id="sq" class="i" style="width:220px" placeholder="Search name or block"></div><div class="tablewrap" id="fullrota"></div></div>`;
   v.innerHTML = html; wireSched();
   if (!rota){ $('#mysched').innerHTML = `<div class="empty">There's no rota tab for this week yet. It will appear here once it's added to the rota file.</div>`; }
   else {
@@ -1573,9 +1573,13 @@ async function viewSchedule(){
   if (isMgr(u) && rota){
     if (!rota.idx) rota.idx = buildRotaIndex((await S.D.access()).rows, rota.people);
     const cell = (txt,k) => `<td class="${!txt||/^off/i.test(txt)?'off':''} ${k===tk?'today':''}">${esc(txt||'—')}</td>`;
-    const paint=()=>{ const q=norm(($('#sq')||{}).value||''); const list=rota.people.filter(p=>!q||norm(p.name).includes(q)||norm(p.team).includes(q));
+    const acc=(await S.D.access()).rows; const deptOf=new Map(); for (const a of acc){ const rp=rota.idx.get(a.Email||a['Full Name']); if (rp) deptOf.set(rp, a.Team||''); }
+    const depts=[...new Set([...deptOf.values()].filter(Boolean))].sort(); const sel=$('#sdept');
+    sel.innerHTML='<option value="">All departments</option>'+depts.map(d=>`<option>${esc(d)}</option>`).join('')+(rota.people.some(p=>!deptOf.get(p))?'<option value="__none">Not linked to a department</option>':'');
+    sel.value=S.schedDept&&[...sel.options].some(o=>o.value===S.schedDept)?S.schedDept:'';
+    const paint=()=>{ const q=norm(($('#sq')||{}).value||''); S.schedDept=sel.value; const list=rota.people.filter(p=>(!sel.value||(sel.value==='__none'?!deptOf.get(p):deptOf.get(p)===sel.value))&&(!q||norm(p.name).includes(q)||norm(p.team).includes(q)));
       $('#fullrota').innerHTML = `<table class="sched"><thead><tr><th>Name</th><th>Block</th>${days.map(d=>`<th>${fmtDate(d)}</th>`).join('')}</tr></thead><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="muted">${esc(p.team)}</td>${days.map(d=>cell(p.days[dkey(d)],dkey(d))).join('')}</tr>`).join('')}</tbody></table>`; };
-    paint(); $('#sq').oninput=paint;
+    paint(); $('#sq').oninput=paint; sel.onchange=paint;
   }
 }
 function wireSched(){ $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
