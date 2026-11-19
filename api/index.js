@@ -86,7 +86,7 @@ function parseRotaSheet(grid, weekStart) {
         if (!name || DAYRX.test(String(rw[c] || '').trim()) || /counter|^total$|^shift$/i.test(name)) break;
         const days = {}; dates.forEach((d, k) => { days[dkey(d)] = String(rw[c + k] ?? '').replace(/\u00a0/g, ' ').trim(); });
         const key = norm(name) + '|' + label; if (seen.has(key)) continue; seen.add(key);
-        people.push({ name, team: label || 'Team', days });
+        people.push({ name, team: label || 'Team', days, at: Object.fromEntries(dates.map((d, k) => [dkey(d), [rr, c + k]])), row: rr, c });
       }
     }
   }
@@ -206,7 +206,7 @@ async function loadRequestsRaw() { let t = await table(URLS.portal, T.req);
   t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r.Email = normEmail(r.Email); r['Submitted By'] = normEmail(r['Submitted By']); r['Submitted At'] = tsString(r['Submitted At']); r.dateList = String(r.Dates || '').split(/[,\s]+/).filter(Boolean); }); return t; }
 async function loadSwaps() { return cached('swaps', 15000.0, loadSwapsRaw); }
 async function loadSwapsRaw() { let t; try { t = await table(URLS.portal, T.swap); } catch (e) { return { headers: [], rows: [], missing: true }; }
-  if (!t.headers.includes('Type')) { try { const b = await book(URLS.portal); await g('POST', `${b}/tables/${T.swap}/columns/add`, { name: 'Type' }); t = await table(URLS.portal, T.swap); } catch (e) { console.error('swap type column', e.message); } } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
+  for (const col of ['Type', 'Written To Rota']) if (!t.headers.includes(col)) { try { const b = await book(URLS.portal); await g('POST', `${b}/tables/${T.swap}/columns/add`, { name: col }); t = await table(URLS.portal, T.swap); } catch (e) { console.error('swap column', col, e.message); } } t.rows = t.rows.filter(r => r.ID); t.rows.forEach(r => { r['Requester Email'] = normEmail(r['Requester Email']); r['Teammate Email'] = normEmail(r['Teammate Email']); r['Requester Date'] = toKey(r['Requester Date']); r['Teammate Date'] = toKey(r['Teammate Date']); r['Submitted At'] = tsString(r['Submitted At']); }); return t; }
 async function loadTracker() { return cached('tracker', 60000.0, loadTrackerRaw); }
 async function loadTrackerRaw() {
   const t = await table(URLS.tracker, TRACKER_TABLE); const H = t.headers; const col = n => H.find(h => h.toLowerCase() === n.toLowerCase());
@@ -285,7 +285,7 @@ async function readData(u, acc, parts) {
     out.tracker = { headers: [], items };
   })));
   if (want('balance')) jobs.push(safe('Leaves Tracker (Balance tab)', loadBalance().then(b => { out.balance = isMgr(u) ? b : Object.fromEntries([norm(u.name), ...nameKeys(u.row)].filter(k => b[k]).map(k => [k, b[k]])); })));
-  if (want('rotaedits')) jobs.push(safe('Schedule changes', loadRotaEdits().then(t => { out.rotaedits = { rows: t.rows.map(r => ({ Email: r.Email, Date: r.Date, Shift: r.Shift, Original: r.Original, Note: r.Note, 'Edited By': r['Edited By'], 'Edited At': r['Edited At'] })) }; })));
+  if (want('rotaedits')) jobs.push(safe('Schedule changes', loadRotaEdits().then(t => { out.rotaedits = { rows: t.rows.map(r => ({ Email: r.Email, Date: r.Date, Shift: r.Shift, Original: r.Original, Note: r.Note, 'Edited By': r['Edited By'], 'Edited At': r['Edited At'], Synced: r.Synced })) }; })));
   if (want('weeks')) jobs.push(safe('Rota', loadWeeks().then(w => { out.weeks = w; })));
   await Promise.all(jobs);
   return out;
@@ -431,12 +431,148 @@ async function doSwapUpdate(u, b, decide) {
   if (decide) { if (!canApproveSwaps(u)) deny('You are not set up to approve swaps. Ask a portal admin.'); if ([r['Requester Email'], r['Teammate Email']].includes(u.email)) deny("You can't approve a swap you're part of."); patch = { Status: b.ok ? 'Approved' : 'Declined', 'Decided By': u.email, 'Decided At': new Date().toISOString(), Note: String(b.note || '').slice(0, 300) }; }
   else { if (r['Requester Email'] !== u.email) deny(); patch = { Status: 'Cancelled' }; }
   Object.assign(r, patch); await setRow(URLS.portal, T.swap, r._i, t.headers.map(k => r[k] ?? ''));
+  if (decide && b.ok) { const acc = await loadAccessRaw(); const st = await syncSwap(t, r, acc, u.email); return { ok: true, rota: st === 'Yes' ? 'written' : st === 'Test' ? 'test' : 'failed', rotaDetail: /^Failed/.test(st) ? st : undefined }; }
   return { ok: true };
 }
-const REDIT_HEADERS = ['ID', 'Email', 'Name', 'Date', 'Shift', 'Original', 'Note', 'Edited By', 'Edited At'];
+/* ---------------- backup sync: the Excel files stay the source of truth ----------------
+   Whatever is done in the portal is also written to the rota, the Leaves Tracker and the Promotions sheet,
+   so the sheets are complete if the portal is ever unavailable. Nothing is written in test mode.
+   A failed write never blocks the action: it is logged (Sync Log) and can be retried from the Access tab. */
+const SYNC_HEADERS = ['ID', 'At', 'Kind', 'Ref', 'Summary', 'Status', 'Detail', 'By'];
+async function syncLog(kind, ref, summary, status, detail, by) {
+  try { await ensureTable(URLS.portal, 'Sync Log', 'tblSyncLog', SYNC_HEADERS); await addRow(URLS.portal, 'tblSyncLog', [uid('Y'), new Date().toISOString(), kind, ref, String(summary).slice(0, 200), status, String(detail || '').slice(0, 400), by || '']); forget('synclog'); }
+  catch (e) { console.error('sync log', e.message); }
+}
+const colLetters = n => { let t = '', x = n + 1; while (x > 0) { const m = (x - 1) % 26; t = String.fromCharCode(65 + m) + t; x = Math.floor((x - 1) / 26); } return t; };
+const cellAddr = (r, c) => colLetters(c) + (r + 1);
+const wsOf = async (url, sheet) => `${await book(url)}/worksheets('${encodeURIComponent(sheet.replace(/'/g, "''"))}')`;
+async function readCell(url, sheet, r, c) { return (await g('GET', `${await wsOf(url, sheet)}/range(address='${cellAddr(r, c)}')?$select=values`)).values[0][0]; }
+async function writeCell(url, sheet, r, c, v, mark) {
+  const w = await wsOf(url, sheet), a = cellAddr(r, c);
+  await g('PATCH', `${w}/range(address='${a}')`, { values: [[v]] });
+  if (mark) { try { await g('PATCH', `${w}/range(address='${a}')/format/fill`, { color: '#FFF2CC' }); } catch (e) { /* colour is only a visual hint */ } }
+}
+const PC_HEADERS = ['At', 'Change', 'Person', 'Date', 'Was', 'Now', 'By', 'Ref'];
+async function portalChange(rows) {
+  try { await ensureTable(URLS.rota, 'Portal Changes', 'tblPortalChanges', PC_HEADERS); for (const r of rows) await addRow(URLS.rota, 'tblPortalChanges', r); }
+  catch (e) { console.error('portal changes tab', e.message); }
+}
+async function rotaTabFor(d) { let pick = null; const day = fromKey(d); for (const w of await loadWeeks()) if (fromKey(w.start) <= day) pick = w; return pick && (day - fromKey(pick.start)) <= 13 * 864e5 ? pick : null; }
+async function loadRotaGrid(cache, sheet) { if (!cache.has(sheet)) { const grid = await sheetText(URLS.rota, sheet); cache.set(sheet, { grid, people: parseRotaSheet(grid, sheetWeekStart(sheet)) }); } return cache.get(sheet); }
+function rotaFind(people, row) {
+  const keys = new Set([...nameKeys(row), norm(row['Rota Name']), norm(row['Roster Name'])].filter(Boolean));
+  const hits = people.filter(p => keys.has(norm(p.name)));
+  if (hits.length > 1) { const t = norm(row.Team); const f = hits.filter(p => t && norm(p.team).includes(t)); return f.length === 1 ? f[0] : 'ambiguous'; }
+  return hits[0] || null;
+}
+async function rotaLocate(row, d, cache) {
+  const w = await rotaTabFor(d); if (!w) throw new Error(`there is no rota tab for ${d}`);
+  const { people } = await loadRotaGrid(cache, w.name); const p = rotaFind(people, row);
+  if (!p || p === 'ambiguous') throw new Error(`${row['Full Name']} ${p ? 'matches more than one row' : "isn't found"} in rota tab ${w.name}. Set their Rota Name in Access`);
+  const at = p.at[d]; if (!at) throw new Error(`${d} is not a day column in ${w.name}`);
+  return { sheet: w.name, r: at[0], c: at[1], text: p.days[d] };
+}
+async function rotaApplySwap(sw, acc) {
+  const A = acc.rows.find(x => x.Email === sw['Requester Email']), B = acc.rows.find(x => x.Email === sw['Teammate Email']); if (!A || !B) throw new Error('one of the people is not on the Access list');
+  const cache = new Map(), plan = [];
+  for (const d of [...new Set([sw['Requester Date'], sw['Teammate Date']])]) plan.push({ d, la: await rotaLocate(A, d, cache), lb: await rotaLocate(B, d, cache) });
+  for (const p of plan) { p.va = await readCell(URLS.rota, p.la.sheet, p.la.r, p.la.c); p.vb = await readCell(URLS.rota, p.lb.sheet, p.lb.r, p.lb.c); }
+  const done = [];
+  for (const p of plan) { await writeCell(URLS.rota, p.la.sheet, p.la.r, p.la.c, p.vb, true); done.push(p); await writeCell(URLS.rota, p.lb.sheet, p.lb.r, p.lb.c, p.va, true); }
+  for (const sh of new Set(plan.flatMap(p => [p.la.sheet, p.lb.sheet]))) forget('rota:' + sh);
+  const now = new Date().toISOString();
+  await portalChange(plan.flatMap(p => [[now, sw.Type || 'Swap', A['Full Name'], p.d, String(p.va), String(p.vb), sw['Decided By'] || '', sw.ID], [now, sw.Type || 'Swap', B['Full Name'], p.d, String(p.vb), String(p.va), sw['Decided By'] || '', sw.ID]]));
+}
+async function syncSwap(t, sw, acc, by) {
+  const label = `${sw.Type || 'Swap'}: ${sw['Requester Name']} and ${sw['Teammate Name']}`;
+  let status;
+  if (isTestMode(await loadSettings())) status = 'Test';
+  else { try { await rotaApplySwap(sw, acc); status = 'Yes'; await syncLog('swap', sw.ID, label, 'Ok', 'Written to the rota', by); } catch (e) { status = 'Failed: ' + e.message.slice(0, 160); await syncLog('swap', sw.ID, label, 'Failed', e.message, by); } }
+  sw['Written To Rota'] = status; await setRow(URLS.portal, T.swap, sw._i, t.headers.map(k => sw[k] ?? '')); forget('swaps');
+  return status;
+}
+async function rotaWriteEdit(row, d, text) {
+  const cache = new Map(); const l = await rotaLocate(row, d, cache); const was = await readCell(URLS.rota, l.sheet, l.r, l.c);
+  await writeCell(URLS.rota, l.sheet, l.r, l.c, text, true); forget('rota:' + l.sheet); return { was: String(was ?? ''), l };
+}
+async function syncNewPerson(row, by) {
+  const out = []; const name = row['Full Name']; const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (isTestMode(await loadSettings())) return [['rota', 'Test'], ['balance', 'Test']];
+  // 1. Leaves Tracker, Balance sheet
+  try {
+    const b = await book(URLS.tracker); const ws = await wsOf(URLS.tracker, BALANCE_SHEET); const ur = await g('GET', `${ws}/usedRange(valuesOnly=true)?$select=address,values`);
+    const h = ur.values[0].map(x => String(x ?? '').trim().toLowerCase()); const cA = h.lastIndexOf('agent'); if (cA < 0) throw new Error('no Agent column in the Balance sheet');
+    if (ur.values.slice(1).some(r => norm(r[cA]) === norm(name))) out.push(['balance', 'Already there']);
+    else {
+      const m = ur.address.match(/!([A-Z]+)(\d+):([A-Z]+)(\d+)$/) || ur.address.match(/!([A-Z]+)(\d+)/); const startRow = +m[2]; const next = startRow + ur.values.length;
+      const st = await loadSettings(); const vals = h.map(k => k === 'agent' ? name : k === 'role' ? (row['Tracker Role'] || '') : k === 'allowance' && st.DefaultAllowance ? +st.DefaultAllowance : '');
+      const last = colLetters(vals.length - 1); await g('PATCH', `${ws}/range(address='A${next}:${last}${next}')`, { values: [vals] }); forget('balance'); out.push(['balance', 'Added (check allowance and start date)']);
+    }
+    await syncLog('person', row.Email, `${name}: Balance sheet`, 'Ok', out.at(-1)[1], by);
+  } catch (e) { out.push(['balance', 'Failed: ' + e.message.slice(0, 120)]); await syncLog('person', row.Email, `${name}: Balance sheet`, 'Failed', e.message, by); }
+  // 2. rota: this week and next week, in the same block as a colleague of the same team
+  try {
+    const acc = await loadAccessRaw(); const mates = acc.rows.filter(x => x.Email !== row.Email && !isNo(x.Active) && norm(x.Team) && norm(x.Team) === norm(row.Team) && x['Portal Role'] === row['Portal Role']);
+    const weeks = (await loadWeeks()).filter(w => fromKey(w.start) >= new Date(today.getTime() - 6 * 864e5)).slice(0, 2); if (!weeks.length) throw new Error('no current rota tab');
+    const cache = new Map(); const res = [];
+    for (const w of weeks) {
+      const { grid, people } = await loadRotaGrid(cache, w.name);
+      if (rotaFind(people, row) && rotaFind(people, row) !== 'ambiguous') { res.push(w.name + ': already there'); continue; }
+      let anchor = null; for (const mt of mates) { const p = rotaFind(people, mt); if (p && p !== 'ambiguous') { anchor = p; break; } }
+      if (!anchor) throw new Error(`no colleague from ${row.Team || 'the same team'} found in ${w.name} to place them next to`);
+      const block = people.filter(p => p.team === anchor.team && p.c === anchor.c); const lastRow = Math.max(...block.map(p => p.row)); const nr = lastRow + 1; const rw = grid[nr] || [];
+      const cells = []; for (let k = -1; k < 7; k++) cells.push(String(rw[anchor.c + k] ?? '').trim());
+      if (cells.some(Boolean)) throw new Error(`no free row under the ${anchor.team} block in ${w.name}. Add them by hand`);
+      await writeCell(URLS.rota, w.name, nr, anchor.c - 1, name, false); forget('rota:' + w.name); res.push(w.name + ': added'); 
+    }
+    out.push(['rota', res.join('; ')]); await syncLog('person', row.Email, `${name}: rota`, 'Ok', res.join('; '), by);
+  } catch (e) { out.push(['rota', 'Failed: ' + e.message.slice(0, 160)]); await syncLog('person', row.Email, `${name}: rota`, 'Failed', e.message, by); }
+  return out;
+}
+async function pushUpdateToPromotions(r, prevTitle) {
+  const sheet = (await sheetNames(URLS.kb)).find(n => /promo/i.test(n) && !/posh/i.test(n)); if (!sheet) throw new Error('no Promotions sheet in the workbook');
+  const ws = await wsOf(URLS.kb, sheet); const ur = await g('GET', `${ws}/usedRange(valuesOnly=true)?$select=address,values`);
+  const m = ur.address.match(/!([A-Z]+)(\d+)/); let c0 = 0; for (const ch of m[1]) c0 = c0 * 26 + ch.charCodeAt(0) - 64; c0--; const r0 = +m[2] - 1; const v = ur.values;
+  let nr = -1, lc = -1;
+  for (let i = 0; i < Math.min(v.length, 10) && nr < 0; i++) for (let c = 0; c < Math.min((v[i] || []).length, 5); c++) if (/promotion details|product details/i.test(String(v[i][c] || ''))) { nr = i; lc = c; break; }
+  if (nr < 0) throw new Error("the Promotions sheet layout wasn't recognised");
+  const width = Math.max(...v.map(x => x.length));
+  let col = r['Sheet Col'] !== '' && r['Sheet Col'] != null && !isNaN(+r['Sheet Col']) ? +r['Sheet Col'] : null;
+  if (col != null && prevTitle && norm((v[nr] || [])[col - c0]) !== norm(prevTitle)) col = null; // the column moved or was changed by hand: add a fresh one
+  if (col == null) col = c0 + width;
+  let detail = -1, first = -1; for (let i = nr + 1; i < v.length; i++) { const lab = String(v[i][lc] ?? '').trim(); if (/details?|description|benefit|info|message/i.test(lab)) { detail = i; break; } if (first < 0 && lab) first = i; }
+  if (detail < 0) detail = first; if (detail < 0) throw new Error('no field rows in the Promotions sheet');
+  await writeCell(URLS.kb, sheet, r0 + nr, col, r.Title, false); await writeCell(URLS.kb, sheet, r0 + detail, col, r.Body, false); forget('kb');
+  return col;
+}
+async function syncUpdate(t, r, prevTitle, by) {
+  let status;
+  if (isTestMode(await loadSettings())) { r['Sheet Col'] = 'Test'; return; }
+  try { r['Sheet Col'] = await pushUpdateToPromotions(r, prevTitle); await syncLog('update', r.ID, r.Title, 'Ok', 'Written to Promotions', by); }
+  catch (e) { await syncLog('update', r.ID, r.Title, 'Failed', e.message, by); }
+}
+async function readSyncLog(u) {
+  if (!(canEditRota(u) || ['Duty Manager', 'General Manager'].includes(u.role))) deny();
+  const t = await cached('synclog', 20e3, async () => { try { await ensureTable(URLS.portal, 'Sync Log', 'tblSyncLog', SYNC_HEADERS); return await table(URLS.portal, 'tblSyncLog'); } catch (e) { return { headers: SYNC_HEADERS, rows: [] }; } });
+  const latest = new Map(); for (const r of t.rows.filter(x => x.ID)) latest.set(r.Kind + '|' + r.Ref, { ...r, At: tsString(r.At) });
+  const rows = [...latest.values()].reverse().slice(0, 40); return { rows, failed: rows.filter(r => r.Status === 'Failed').length };
+}
+async function doSyncRetry(u, acc, b) {
+  if (!(canEditRota(u) || ['Duty Manager', 'General Manager'].includes(u.role))) deny();
+  const kind = String(b.kind || ''), ref = String(b.ref || '');
+  if (kind === 'swap') { const t = await loadSwapsRaw(); const sw = t.rows.find(x => x.ID === ref); if (!sw || sw.Status !== 'Approved') bad('Swap not found.'); if (sw['Written To Rota'] === 'Yes') bad('This swap is already in the rota.'); return { status: await syncSwap(t, sw, acc, u.email) }; }
+  if (kind === 'rotaedit') { const t = await loadRotaEditsRaw(); const r = t.rows.find(x => x.ID === ref); if (!r) bad('Change not found.'); if (r.Synced === 'Yes') bad('Already in the rota.'); const who = acc.rows.find(x => x.Email === r.Email);
+    try { const w = await rotaWriteEdit(who, r.Date, r.Shift); r.Original = r.Original || w.was; r.Synced = 'Yes'; await syncLog('rotaedit', r.ID, `${r.Name} ${r.Date}`, 'Ok', 'Written to the rota', u.email); } catch (e) { await syncLog('rotaedit', r.ID, `${r.Name} ${r.Date}`, 'Failed', e.message, u.email); bad('Still failing: ' + e.message); }
+    await setRow(URLS.portal, 'tblRotaEdits', r._i, t.headers.map(k => r[k] ?? '')); forget('rotaedits'); return { status: 'Yes' }; }
+  if (kind === 'person') { const who = acc.rows.find(x => x.Email === ref); if (!who) bad('Person not found.'); return { results: await syncNewPerson(who, u.email) }; }
+  if (kind === 'update') { const t = await loadUpdates(); const r = t.rows.find(x => x.ID === ref); if (!r) bad('Update not found.'); await syncUpdate(t, r, '', u.email); await setRow(URLS.portal, 'tblUpdates', r._i, t.headers.map(k => r[k] ?? '')); return { status: r['Sheet Col'] === '' ? 'Failed' : 'Yes' }; }
+  bad('Unknown item.');
+}
+const REDIT_HEADERS = ['ID', 'Email', 'Name', 'Date', 'Shift', 'Original', 'Note', 'Edited By', 'Edited At', 'Synced'];
 async function loadRotaEditsRaw() {
   await ensureTable(URLS.portal, 'Rota Edits', 'tblRotaEdits', REDIT_HEADERS);
-  const t = await table(URLS.portal, 'tblRotaEdits');
+  let t = await table(URLS.portal, 'tblRotaEdits');
+  if (!t.headers.includes('Synced')) { const bk = await book(URLS.portal); await g('POST', `${bk}/tables/tblRotaEdits/columns/add`, { name: 'Synced' }); t = await table(URLS.portal, 'tblRotaEdits'); }
   t.rows = t.rows.filter(r => r.ID && r.Email); t.rows.forEach(r => { r.Email = normEmail(r.Email); r.Date = toKey(r.Date); r['Edited At'] = tsString(r['Edited At']); });
   return t;
 }
@@ -447,15 +583,24 @@ async function doRotaEdit(u, acc, b) {
   if (!isKey(b.date)) bad('Pick a date.');
   const shift = String(b.shift || '').trim().slice(0, 120); if (!shift) bad('Enter a shift (for example 09:00-18:00) or choose Day off.');
   const t = await loadRotaEditsRaw();
-  const row = { ID: uid('R'), Email: who.Email, Name: who['Full Name'], Date: b.date, Shift: shift, Original: String(b.original || '').slice(0, 120), Note: String(b.note || '').slice(0, 300), 'Edited By': u.email, 'Edited At': new Date().toISOString() };
   const old = t.rows.find(r => r.Email === who.Email && r.Date === b.date);
-  if (old) { row.ID = old.ID; row.Original = old.Original; await setRow(URLS.portal, 'tblRotaEdits', old._i, rowFor(t.headers, row)); }
-  else await addRow(URLS.portal, 'tblRotaEdits', rowFor(t.headers, row));
-  forget('rotaedits'); return { ok: true };
+  const row = { ID: old ? old.ID : uid('R'), Email: who.Email, Name: who['Full Name'], Date: b.date, Shift: shift, Original: old ? old.Original : String(b.original || '').slice(0, 120), Note: String(b.note || '').slice(0, 300), 'Edited By': u.email, 'Edited At': new Date().toISOString(), Synced: '' };
+  let rota = 'test';
+  if (!isTestMode(await loadSettings())) {
+    try { const w = await rotaWriteEdit(who, b.date, shift); if (!old) row.Original = w.was; row.Synced = 'Yes'; rota = 'written'; await portalChange([[row['Edited At'], 'Schedule change', who['Full Name'], b.date, w.was, shift, u.email, row.ID]]); await syncLog('rotaedit', row.ID, `${who['Full Name']} ${b.date}`, 'Ok', 'Written to the rota', u.email); }
+    catch (e) { row.Synced = 'Failed: ' + e.message.slice(0, 120); rota = 'failed'; await syncLog('rotaedit', row.ID, `${who['Full Name']} ${b.date}`, 'Failed', e.message, u.email); }
+  } else row.Synced = 'Test';
+  if (old) await setRow(URLS.portal, 'tblRotaEdits', old._i, rowFor(t.headers, row)); else await addRow(URLS.portal, 'tblRotaEdits', rowFor(t.headers, row));
+  forget('rotaedits'); return { ok: true, rota, rotaDetail: rota === 'failed' ? row.Synced : undefined };
 }
 async function doRotaEditClear(u, b) {
   if (!canEditRota(u)) deny('You are not set up to change the schedule. Ask a portal admin.');
   const t = await loadRotaEditsRaw(); const r = t.rows.find(x => x.Email === normEmail(b.email) && x.Date === b.date); if (!r) return { ok: true };
+  if (r.Synced === 'Yes' && r.Original !== '' && r.Original != null) {
+    const who = (await loadAccessRaw()).rows.find(x => x.Email === r.Email);
+    try { await rotaWriteEdit(who, r.Date, r.Original); await portalChange([[new Date().toISOString(), 'Restored rota', r.Name, r.Date, r.Shift, String(r.Original), u.email, r.ID]]); }
+    catch (e) { await syncLog('rotaedit', r.ID, `${r.Name} ${r.Date}`, 'Failed', 'Restore failed: ' + e.message, u.email); bad("The Excel rota couldn't be restored (" + e.message + '). Fix the cell by hand, then try again.'); }
+  }
   const bk = await book(URLS.portal); await g('DELETE', `${bk}/tables/tblRotaEdits/rows/itemAt(index=${r._i})`);
   forget('rotaedits'); return { ok: true };
 }
@@ -484,7 +629,8 @@ async function doAccess(u, accCached, b) {
     r['Team Leader'] = clean['Full Name']; if (!r['Manager Email'] && clean.Email) r['Manager Email'] = clean.Email;
     await setRow(URLS.portal, T.access, r._i, H.map(k => r[k] ?? '')); moved++;
   }
-  qCache = null; return { ok: true, renamed: !!renamed, teamUpdated: moved };
+  qCache = null; let sync; if (!old && clean.Email && !isNo(clean.Active)) { try { sync = await syncNewPerson(clean, u.email); } catch (e) { console.error('person sync', e.message); } }
+  return { ok: true, renamed: !!renamed, teamUpdated: moved, sync };
 }
 
 /* ---------------- quality: evaluations + disputes ---------------- */
@@ -747,7 +893,7 @@ async function doKbEdit(u, b) {
   if (isNew) await addRow(URLS.portal, 'tblKbEdits', rowFor(t.headers, r)); else await setRow(URLS.portal, 'tblKbEdits', r._i, t.headers.map(k => r[k] ?? ''));
   forget('kbedits'); ixCache = null; return { ok: true };
 }
-const UPDATE_HEADERS = ['ID', 'Posted At', 'Posted By', 'Posted By Name', 'Title', 'Body', 'Category', 'Pinned', 'Active', 'Edited At', 'Edited By'];
+const UPDATE_HEADERS = ['ID', 'Posted At', 'Posted By', 'Posted By Name', 'Title', 'Body', 'Category', 'Pinned', 'Active', 'Edited At', 'Edited By', 'Sheet Col'];
 async function loadUpdates() {
   await ensureTable(URLS.portal, 'Updates', 'tblUpdates', UPDATE_HEADERS);
   let t = await table(URLS.portal, 'tblUpdates');
@@ -770,14 +916,16 @@ async function doUpdate(u, b) {
   if (!canPost(u)) deny('Only team leaders and managers can post updates.');
   const t = await loadUpdates();
   if (b.id) { const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Update not found.'); if (r['Posted By'] !== u.email && !['Duty Manager', 'General Manager'].includes(u.role) && !u.admin) deny('You can only change your own updates.');
-    if (b.remove) r.Active = 'No'; if (b.pin != null) r.Pinned = b.pin ? 'Yes' : 'No';
+    const prevTitle = r.Title; if (b.remove) r.Active = 'No'; if (b.pin != null) r.Pinned = b.pin ? 'Yes' : 'No';
     if (b.title != null || b.body != null) {
       const title = String(b.title ?? r.Title).trim().slice(0, 140), body = String(b.body ?? r.Body).trim().slice(0, 4000); if (title.length < 3) bad('Add a title.'); if (body.length < 3) bad('Write the update.');
       Object.assign(r, { Title: title, Body: body, Category: String(b.category || r.Category || 'General').slice(0, 40), 'Edited At': new Date().toISOString(), 'Edited By': u.email });
     }
+    if (b.title != null || b.body != null) await syncUpdate(t, r, prevTitle, u.email);
     await setRow(URLS.portal, 'tblUpdates', r._i, t.headers.map(k => r[k] ?? '')); return { ok: true }; }
   const title = String(b.title || '').trim().slice(0, 140), body = String(b.body || '').trim().slice(0, 4000); if (title.length < 3) bad('Add a title.'); if (body.length < 3) bad('Write the update.');
   const row = { ID: uid('U'), 'Posted At': new Date().toISOString(), 'Posted By': u.email, 'Posted By Name': u.name, Title: title, Body: body, Category: String(b.category || 'General').slice(0, 40), Pinned: b.pin ? 'Yes' : 'No', Active: 'Yes' };
+  row['Sheet Col'] = ''; await syncUpdate(t, row, '', u.email);
   await addRow(URLS.portal, 'tblUpdates', rowFor(t.headers, row)); return { ok: true, id: row.ID };
 }
 function kbText(items) {
@@ -1044,7 +1192,7 @@ export default async function handler(req, res) {
     let out;
     switch (route) {
       case 'data': out = await readData(u, acc, req.query.parts ? String(req.query.parts).split(',') : null); break;
-      case 'rota': { const sheet = String(req.query.sheet || ''); if (!(await loadWeeks()).some(w => w.name === sheet)) bad('Unknown rota week.'); const w = sheetWeekStart(sheet); out = await cached('rota:' + sheet, 300e3, async () => ({ name: sheet, start: dkey(w), people: parseRotaSheet(await sheetText(URLS.rota, sheet), w) })); break; }
+      case 'rota': { const sheet = String(req.query.sheet || ''); if (!(await loadWeeks()).some(w => w.name === sheet)) bad('Unknown rota week.'); const w = sheetWeekStart(sheet); out = await cached('rota:' + sheet, 300e3, async () => ({ name: sheet, start: dkey(w), people: parseRotaSheet(await sheetText(URLS.rota, sheet), w).map(p => ({ name: p.name, team: p.team, days: p.days })) })); break; }
       case 'att': out = await doAttendance(u, acc, b); break;
       case 'req': out = await doRequest(u, acc, b); break;
       case 'decide': out = await doDecide(u, acc, b); break;
@@ -1058,6 +1206,8 @@ export default async function handler(req, res) {
       case 'qaupload': out = await doQaUpload(u, b); break;
       case 'qadelete': out = await doQaDelete(u, b); break;
       case 'qafile': out = await readQaFile(u, String(req.query.id || '')); break;
+      case 'synclog': out = await readSyncLog(u); break;
+      case 'syncretry': out = await doSyncRetry(u, acc, b); break;
       case 'rotaedit': out = await doRotaEdit(u, acc, b); break;
       case 'rotaeditclear': out = await doRotaEditClear(u, b); break;
       case 'quality': out = await readQuality(u, acc); break;

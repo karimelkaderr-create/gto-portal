@@ -733,7 +733,7 @@ class Data {
   async rotaEdits(){ return { rows:[] }; }
   async overrides(){
     if (this.cache.ov) return this.cache.ov;
-    const sw = (await this.swaps()).rows.filter(r=>r.Status==='Approved'); const acc = await this.people(); const ov = new Map();
+    const sw = (await this.swaps()).rows.filter(r=>r.Status==='Approved' && r['Written To Rota']!=='Yes'); const acc = await this.people(); const ov = new Map();  // a swap already written into the rota must not be applied twice
     const edits = new Map(((await this.rotaEdits()).rows||[]).map(e=>[e.Email+'|'+e.Date, e]));
     // an edit made before a swap was approved is part of what gets swapped
     const basis = async (P, date, at) => { const e = edits.get(P.Email+'|'+dkey(date)); return e && String(e['Edited At']||'') < String(at||'') ? e.Shift : (await this.baseShift(P,date)).text; };
@@ -745,7 +745,7 @@ class Data {
         ov.set(A.Email+'|'+d, { text:b, swap:r, with:B['Full Name'], at }); ov.set(B.Email+'|'+d, { text:a, swap:r, with:A['Full Name'], at });
       }
     }
-    for (const [k,e] of edits){ const cur = ov.get(k); if (!cur || String(e['Edited At']||'') >= String(cur.at||'')) ov.set(k, { text:e.Shift, edit:e }); }
+    for (const [k,e] of edits){ if (e.Synced==='Yes') continue; /* already in the Excel rota: the sheet is the truth */ const cur = ov.get(k); if (!cur || String(e['Edited At']||'') >= String(cur.at||'')) ov.set(k, { text:e.Shift, edit:e }); }
     return this.cache.ov = ov;
   }
   async shiftFor(person, date){
@@ -781,7 +781,7 @@ class ApiData extends Data {
     if (d.settings) this.cache.settings = d.settings;
     if (d.attendance){ d.attendance.rows.forEach(r=>r.ts=new Date(r.Timestamp)); this.cache.att = d.attendance; }
     if (d.requests) this.cache.req = d.requests;
-    if (d.swaps){ this.cache.sw = d.swaps; this.cache.ov = null; }
+    if (d.swaps){ const w=d.swaps.rows.filter(r=>r['Written To Rota']==='Yes').map(r=>r.ID).sort().join(','); if (this._wrote!==undefined && w!==this._wrote) this.cache.rota=null; this._wrote=w; this.cache.sw = d.swaps; this.cache.ov = null; }
     if (d.rotaedits){ this.cache.re = d.rotaedits; this.cache.ov = null; }
     if (d.tracker) this.cache.tr = d.tracker;
     if (d.balance){ for (const k in d.balance){ const b=d.balance[k]; if (b){ b.start=b.start&&fromKey(b.start); b.allowanceStart=b.allowanceStart&&fromKey(b.allowanceStart); } } this.cache.bal = d.balance; }
@@ -807,8 +807,8 @@ class ApiData extends Data {
   async requests(force){ if (force || !this.cache.req) await this.load(['requests']); return this.cache.req; }
   async swaps(force){ if (force || !this.cache.sw) await this.load(['swaps']); return this.cache.sw; }
   async rotaEdits(force){ if (force || !this.cache.re) await this.load(['rotaedits']); return this.cache.re; }
-  async editShift(o){ await this.call('POST','rotaedit',o); await this.rotaEdits(true); }
-  async clearShift(o){ await this.call('POST','rotaeditclear',o); await this.rotaEdits(true); }
+  async editShift(o){ const r=await this.call('POST','rotaedit',o); this.cache.rota=null; await this.rotaEdits(true); return r; }
+  async clearShift(o){ const r=await this.call('POST','rotaeditclear',o); this.cache.rota=null; await this.rotaEdits(true); return r; }
   async tracker(force){ if (force || !this.cache.tr) await this.load(['tracker']); return this.cache.tr; }
   async balance(){ if (!this.cache.bal) await this.load(['balance']); return this.cache.bal; }
   async rotaWeeks(){ if (!this.cache.weeks) await this.load(['weeks']); return this.cache.weeks; }
@@ -817,7 +817,7 @@ class ApiData extends Data {
     let pick=null; for (const w of weeks){ if (w.start<=date) pick=w; }
     if (!pick || (date-pick.start) > 13*864e5) return null;
     this.cache.rota = this.cache.rota || {};
-    if (!this.cache.rota[pick.name]) this.cache.rota[pick.name] = this.call('GET','rota',null,{sheet:pick.name}).then(r=>({ week:pick, people:r.people }));
+    if (!this.cache.rota[pick.name]){ await this.swaps(true); this.cache.rota[pick.name] = this.call('GET','rota',null,{sheet:pick.name}).then(r=>({ week:pick, people:r.people })); }
     return await this.cache.rota[pick.name];
   }
   async addAttendance(o){ const r = await this.call('POST','att',{ action:o.Action, email:o.Email, shiftDate:o['Shift Date'], ts:o.Timestamp, note:o.Note }); const row=r.row; row.ts=new Date(row.Timestamp); if (this.cache.att) this.cache.att.rows.push(row); }
@@ -825,9 +825,9 @@ class ApiData extends Data {
   async capCheck(o){ try { return await this.call('POST','req',{ email:o.email, type:o.type, dates:o.dates, check:true }); } catch(e){ if (e.capacity) return { blocked:!!e.capacity.blocked, exception:false, message:e.message, ...e.capacity }; throw e; } }
   async updateRequest(id, patch){ if (patch.Status==='Cancelled'){ await this.call('POST','cancel',{id}); await this.requests(true); return; } throw new Error('Not supported'); }
   async addSwap(o){ await this.call('POST','swap',{ teammate:o['Teammate Email'], myDate:o['Requester Date'], theirDate:o['Teammate Date'], myShift:o['Requester Shift'], theirShift:o['Teammate Shift'], reason:o.Reason, type:o._type }); await this.swaps(true); }
-  async updateSwap(id, patch){ if (patch.Status==='Cancelled') await this.call('POST','swapcancel',{id}); else await this.call('POST','swapdecide',{ id, ok:patch.Status==='Approved', note:patch.Note }); await this.swaps(true); }
+  async updateSwap(id, patch){ if (patch.Status==='Cancelled') await this.call('POST','swapcancel',{id}); else { const r=await this.call('POST','swapdecide',{ id, ok:patch.Status==='Approved', note:patch.Note }); await this.swaps(true); return r; } await this.swaps(true); }
   async updateAccess(row){ await this.call('POST','access',{ row }); await this.access(true); }
-  async addAccess(row){ await this.call('POST','access',{ row:{...row,_i:undefined} }); await this.access(true); }
+  async addAccess(row){ const r=await this.call('POST','access',{ row:{...row,_i:undefined} }); await this.access(true); return r; }
 }
 
 /* ============================ Demo store (no sign-in) ============================ */
@@ -1590,9 +1590,9 @@ async function viewSchedule(){
   if (isMgr(u) && rota){
     if (!rota.idx) rota.idx = buildRotaIndex((await S.D.access()).rows, rota.people);
     const acc=(await S.D.access()).rows; const deptOf=new Map(), emailOf=new Map(); for (const a of acc){ const rp=rota.idx.get(a.Email||a['Full Name']); if (rp){ deptOf.set(rp, a.Team||''); if (a.Email) emailOf.set(rp, a.Email); } }
-    const ov=await S.D.overrides(); const editable=canRota(u);
-    const cell = (p,k) => { const em=emailOf.get(p); const o=em&&ov.get(em+'|'+k); const txt=o?o.text:p.days[k]; const chg=o&&o.edit; const can=editable&&em;
-      return `<td class="${!txt||/^off/i.test(txt)?'off':''} ${k===tk?'today':''} ${chg?'edited':''} ${can?'canedit':''}" ${can?`data-ed="${esc(em)}" data-d="${k}" data-n="${esc(p.name)}" role="button" tabindex="0"`:''} title="${chg?'Changed by '+esc(o.edit['Edited By'])+(o.edit.Note?': '+esc(o.edit.Note):''):can?'Click to change':''}">${esc(txt||'—')}</td>`; };
+    const ov=await S.D.overrides(); const editable=canRota(u); const edRows=new Map(((await S.D.rotaEdits()).rows||[]).map(e=>[e.Email+'|'+e.Date,e]));
+    const cell = (p,k) => { const em=emailOf.get(p); const o=em&&ov.get(em+'|'+k); const ed=em&&edRows.get(em+'|'+k); const txt=o?o.text:p.days[k]; const chg=ed||(o&&o.edit); const eo=ed||(o&&o.edit); const can=editable&&em;
+      return `<td class="${!txt||/^off/i.test(txt)?'off':''} ${k===tk?'today':''} ${chg?'edited':''} ${can?'canedit':''}" ${can?`data-ed="${esc(em)}" data-d="${k}" data-n="${esc(p.name)}" role="button" tabindex="0"`:''} title="${chg?'Changed by '+esc(eo['Edited By'])+(eo.Note?': '+esc(eo.Note):''):can?'Click to change':''}">${esc(txt||'—')}</td>`; };
     const depts=[...new Set([...deptOf.values()].filter(Boolean))].sort(); const sel=$('#sdept');
     sel.innerHTML='<option value="">All departments</option>'+depts.map(d=>`<option>${esc(d)}</option>`).join('')+(rota.people.some(p=>!deptOf.get(p))?'<option value="__none">Not linked to a department</option>':'');
     sel.value=S.schedDept&&[...sel.options].some(o=>o.value===S.schedDept)?S.schedDept:'';
@@ -1603,7 +1603,7 @@ async function viewSchedule(){
   }
 }
 async function editShiftModal(email, date, name, current){
-  const ov=await S.D.overrides(); const o=ov.get(email+'|'+date); const person=(await S.D.people()).find(x=>x.Email===email)||{Email:email,'Full Name':name};
+  const ed=((await S.D.rotaEdits()).rows||[]).find(e=>e.Email===email&&e.Date===date); const o={ edit:ed }; const person=(await S.D.people()).find(x=>x.Email===email)||{Email:email,'Full Name':name};
   const base=(await S.D.baseShift(person,fromKey(date))).text;
   modal(`<h2>${esc(name)}</h2><p class="muted" style="margin:0 0 10px">${fmtDate(fromKey(date))}. Now: <b>${esc(current)}</b>${o&&o.edit?` <span class="muted">(rota says ${esc(base||'—')})</span>`:''}</p>
     <label class="f">New shift (for example 09:00-18:00)</label><input class="i" id="esh" value="${esc(current==='—'?'':current)}" maxlength="120">
@@ -1612,7 +1612,7 @@ async function editShiftModal(email, date, name, current){
     <p class="muted" style="font-size:13px;margin:10px 0 0">This changes what the portal shows for this person on this day. The Excel rota itself is not touched.</p>
     <div class="row" style="margin-top:16px">${o&&o.edit?'<button class="btn" id="erest">Restore rota</button>':''}<span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="esave">Save change</button></div>`);
   $('#eoff').onclick=()=>{ $('#esh').value='OFF'; };
-  const done=async fn=>{ try{ await fn(); closeModal(); toast('Schedule updated'); viewSchedule(); }catch(e){ alertBox(e); } };
+  const done=async fn=>{ try{ const r=await fn(); closeModal(); toast('Schedule updated'); viewSchedule(); if (r&&r.rota==='failed') setTimeout(()=>modal(`<h2>Changed in the portal, not in the rota sheet</h2><div class="alert warn">${esc(r.rotaDetail||'')}. You can retry from the Access tab (Backup sync).</div><div class="row"><span class="spacer"></span><button class="btn" data-close>OK</button></div>`),400); }catch(e){ alertBox(e); } };
   $('#esave').onclick=()=>{ const sh=$('#esh').value.trim(); if(!sh) return toast('Enter a shift or choose Day off'); $('#esave').disabled=true; done(()=>S.D.editShift({ email, date, shift:sh, note:$('#enote').value.trim(), original:base })); };
   const rs=$('#erest'); if (rs) rs.onclick=()=>done(()=>S.D.clearShift({ email, date }));
 }
@@ -1694,7 +1694,7 @@ async function paintSwapQueue(list){
     <div class="row" style="margin-top:10px"><input class="i" style="flex:1;min-width:160px" placeholder="Note (optional)" id="sn_${r.ID}"><button class="btn primary" data-swap-ok="${r.ID}">Approve swap</button><button class="btn danger" data-swap-no="${r.ID}">Decline</button></div></div>`).join('');
   document.querySelectorAll('[data-swap-ok],[data-swap-no]').forEach(b=>b.onclick=async()=>{
     const id=b.dataset.swapOk||b.dataset.swapNo; const ok=!!b.dataset.swapOk; b.disabled=true;
-    try{ await S.D.updateSwap(id,{Status:ok?'Approved':'Declined','Decided By':S.me.email,'Decided At':new Date().toISOString(),Note:$('#sn_'+id).value.trim()}); toast(ok?'Swap approved':'Swap declined'); }catch(e){ alertBox(e); }
+    try{ const r=await S.D.updateSwap(id,{Status:ok?'Approved':'Declined','Decided By':S.me.email,'Decided At':new Date().toISOString(),Note:$('#sn_'+id).value.trim()}); toast(ok?'Swap approved':'Swap declined'); if (r&&r.rota==='failed') modal(`<h2>Approved, but the rota sheet was not updated</h2><div class="alert warn">The swap is approved and shows correctly in the portal. Writing it into the Excel rota failed: ${esc(r.rotaDetail||'')}. You can retry from the Access tab (Backup sync).</div><div class="row"><span class="spacer"></span><button class="btn" data-close>OK</button></div>`); }catch(e){ alertBox(e); }
     render();
   });
 }
@@ -2281,6 +2281,7 @@ async function viewAdmin(){
   v.innerHTML = `<div class="card sec" style="margin-top:0"><h2>Portal controls</h2>
     <div class="row" style="gap:14px;align-items:center;margin:8px 0"><div style="flex:1;min-width:220px"><b>Client credits</b><div class="muted" style="font-size:13px">Who can open the Client credits tab. Changes reach people within about a minute.</div></div><select id="ctl-cr" class="i" style="width:auto"><option value="Everyone">On for everyone</option><option value="Leads">Leads and above only</option><option value="Off">Off for everyone</option></select></div>
     <div class="row" style="gap:14px;align-items:center;margin:14px 0 0;padding-top:14px;border-top:1px solid var(--line,#2a2e36)"><div style="flex:1;min-width:220px"><b>Testing phase</b> ${tm?'<span class="chip warn">Test mode is ON</span>':'<span class="chip ok">Live</span>'}<div class="muted" style="font-size:13px">${tm?'Nothing is written to the Leaves Tracker or the rota. Going live clears every leave request, swap, attendance record, dispute, update, assistant question and client lookup created since test mode started, so the portal matches your sheets again.':'Turn on test mode while the team tries the portal. Approved leave is not written to the Leaves Tracker, and the test data can be cleared in one go.'}</div></div>${tm?'<button class="btn primary" id="ctl-live">Go live (reset)</button>':'<button class="btn" id="ctl-test">Start test mode</button>'}</div></div>
+    <div class="card sec" id="syncbox"><h2>Backup sync</h2><p class="muted" style="margin:0">Checking…</p></div>
     <div class="card"><div class="row"><h2 style="margin:0">People</h2><span class="spacer"></span><input id="adq" class="i" style="width:220px" placeholder="Search"><select id="adr" class="i" style="width:auto"><option value="">All roles</option><option value="none">No role yet</option>${ROLES.map(r=>`<option>${r}</option>`).join('')}</select><button class="btn primary" id="adnew">Add person</button></div>
     <p class="muted">Everyone who can open the portal. This is the same list as the Access tab in "GTO Portal Data.xlsx", so you can edit it in either place.</p><div class="tablewrap" id="adt"></div></div>`;
   const paint=()=>{ const q=norm($('#adq').value), rf=$('#adr').value;
@@ -2289,6 +2290,10 @@ async function viewAdmin(){
     document.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>editPerson(t.rows.find(x=>x._i===+b.dataset.ed)));
   };
   paint(); $('#adq').oninput=paint; $('#adr').onchange=paint; $('#adnew').onclick=()=>editPerson(null);
+  (async()=>{ const box=$('#syncbox'); try{ const r=await S.D.call('GET','synclog'); const kindL={swap:'Swap',rotaedit:'Schedule change',person:'New person',update:'Update'};
+    box.innerHTML=`<h2 style="margin-bottom:4px">Backup sync ${r.failed?`<span class="chip bad">${r.failed} need attention</span>`:'<span class="chip ok">All good</span>'}</h2><p class="muted" style="margin:0 0 10px;font-size:13.5px">Swaps, schedule changes, new people and updates are also written to the Excel files, so they stay complete if the portal is ever down. Every rota change is also listed on the Portal Changes tab in the rota file.</p>`+(r.rows.length?`<div class="tablewrap" style="max-height:260px"><table><thead><tr><th>When</th><th>What</th><th>Result</th><th></th></tr></thead><tbody>${r.rows.slice(0,15).map(x=>`<tr><td>${x.At?fmtDate(parseTs(x.At)):''}</td><td>${esc(kindL[x.Kind]||x.Kind)}: ${esc(x.Summary)}</td><td>${x.Status==='Failed'?`<span class="chip bad">Failed</span> <span class="muted" style="font-size:12.5px">${esc(x.Detail)}</span>`:'<span class="chip ok">Done</span>'}</td><td>${x.Status==='Failed'?`<button class="btn sm" data-sk="${esc(x.Kind)}" data-sr="${esc(x.Ref)}">Retry</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted" style="margin:0">Nothing has been synced yet.</p>');
+    box.querySelectorAll('[data-sk]').forEach(bt=>bt.onclick=async()=>{ bt.disabled=true; try{ await S.D.call('POST','syncretry',{ kind:bt.dataset.sk, ref:bt.dataset.sr }); toast('Done'); viewAdmin(); }catch(e){ alertBox(e); bt.disabled=false; } });
+  }catch(e){ box.innerHTML='<h2>Backup sync</h2><p class="muted" style="margin:0">Not available right now.</p>'; } })();
   const cr=$('#ctl-cr'); cr.value=creditsMode();
   cr.onchange=async()=>{ try{ await S.D.call('POST','setting',{key:'ClientCredits',value:cr.value}); S.settings.ClientCredits=cr.value; toast('Client credits updated'); }catch(e){ alertBox(e); cr.value=creditsMode(); } };
   const ts=$('#ctl-test'); if (ts) ts.onclick=async()=>{ if (!confirm('Start test mode?\n\nLeave approvals will not be written to the Leaves Tracker, and a banner shows on every page. Everything created while testing can be cleared when you go live.')) return; try{ await S.D.call('POST','setting',{key:'TestMode',value:'On'}); S.settings.TestMode='On'; toast('Test mode is on'); render(); }catch(e){ alertBox(e); } };
@@ -2316,7 +2321,7 @@ function editPerson(r){
     o.Email=normEmail(o.Email); if(!o['Full Name']) return toast('Name is required');
     const tlRow = t.rows.find(x=>norm(x['Full Name'])===norm(o['Team Leader'])); o['Manager Email'] = tlRow ? tlRow.Email : '';
     $('#psave').disabled=true;
-    try{ if(isNew) await S.D.addAccess(o); else await S.D.updateAccess(o); closeModal(); toast('Saved'); viewAdmin(); }catch(e){ alertBox(e); $('#psave').disabled=false; }
+    try{ let r; if(isNew) r=await S.D.addAccess(o); else await S.D.updateAccess(o); closeModal(); const bad=r&&r.sync&&r.sync.filter(x=>/^Failed/.test(x[1])); toast(bad&&bad.length?'Saved, but not added to: '+bad.map(x=>x[0]==='rota'?'the rota':'the Balance sheet').join(' and ')+' (see Backup sync)':r&&r.sync?'Saved and added to the rota and Balance sheet':'Saved'); viewAdmin(); }catch(e){ alertBox(e); $('#psave').disabled=false; }
   };
 }
 
