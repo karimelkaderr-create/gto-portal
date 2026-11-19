@@ -903,7 +903,33 @@ async function loadUpdates() {
   return t;
 }
 const canPost = u => u.admin || ['Team Leader', 'Duty Manager', 'General Manager', 'HR', 'Quality'].includes(u.role);
+/* New offers added to the Promotions workbook by hand become an update, so everyone is notified (the normal update poll picks it up). */
+const KB_SEEN = 'kb/seen.txt'; let lastOfferCheck = 0;
+async function detectNewOffers() {
+  if (Date.now() - lastOfferCheck < 5 * 60e3) return; lastOfferCheck = Date.now();
+  try {
+    const st = await loadSettings(); if (isTestMode(st)) return;
+    const kb = await loadKb(); if (kb.source !== 'live' || !kb.items.length) return;
+    const raw = await blobText(KB_SEEN); let seen = null; try { seen = raw ? new Set(dec(raw).keys) : null; } catch (e) { seen = null; }
+    const keys = kb.items.map(i => i.cat + '|' + i.name);
+    const save = async set => { const { put } = await blob(); await put(KB_SEEN, enc({ keys: [...set] }), { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain' }); };
+    if (!seen) { await save(new Set(keys)); return; }   // first run: today's offers are the baseline, nobody is notified about them
+    const fresh = kb.items.filter(i => !seen.has(i.cat + '|' + i.name)); if (!fresh.length) return;
+    const up = await cached('updates', 30e3, loadUpdates); const have = new Set(up.rows.map(r => norm(r.Title)));
+    const pickF = (it, rx) => { const k = Object.keys(it.fields).find(x => rx.test(x)); return k ? `${k}: ${String(it.fields[k]).replace(/\s+/g, ' ').slice(0, 220)}` : ''; };
+    for (const it of fresh.slice(0, 5)) {
+      seen.add(it.cat + '|' + it.name);
+      if ([...have].some(h => h.includes(norm(it.name)))) continue;   // already announced through the portal
+      const body = [pickF(it, /offer period|period/i), pickF(it, /discount|benefit/i), pickF(it, /booking period/i), pickF(it, /details?|description/i)].filter(Boolean).join('\n') || 'Added to the Promotions sheet. Open the offer in Updates for the details.';
+      const row = { ID: 'K' + crypto.createHash('sha1').update(it.cat + '|' + it.name).digest('hex').slice(0, 10), 'Posted At': new Date().toISOString(), 'Posted By': 'promotions-sheet', 'Posted By Name': 'Promotions sheet', Title: `New ${it.cat === 'Product' ? 'product' : it.cat === 'Posh Saver' ? 'Posh Saver' : 'promotion'}: ${it.name}`.slice(0, 140), Body: body.slice(0, 1500), Category: 'Offers', Pinned: 'No', Active: 'Yes', 'Sheet Col': 'Sheet' };
+      if (up.rows.some(r => r.ID === row.ID)) continue;
+      await addRow(URLS.portal, 'tblUpdates', rowFor(up.headers, row));
+    }
+    forget('updates'); await save(seen);
+  } catch (e) { console.error('new offer check', e.message); }
+}
 async function readUpdates() {
+  await detectNewOffers();
   const up = await cached('updates', 30e3, loadUpdates);
   const st = await loadSettings();
   return { flags: { test: isTestMode(st), credits: creditsMode(st) }, updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))) };
@@ -1236,3 +1262,4 @@ export default async function handler(req, res) {
     return res.status(status).json({ error: e.message || 'Server error', ...(e.capacity ? { capacity: e.capacity } : {}) });
   }
 }
+export const __resetOffers = () => { lastOfferCheck = 0; forget('kb', 'kbedits'); };
