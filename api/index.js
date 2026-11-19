@@ -15,7 +15,7 @@ const URLS = {
   tracker: process.env.TRACKER_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/karim_abdelkader_gto_org_uk/IQAGYUtqR1vLSKqP0FlZ6RATAdBiU8BgwfIHE4l4MyEuylk',
   rota: process.env.ROTA_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCsgxuG2GMfQrdxchuLp-g-AUXcRe-tUdm0up6CarphlSA',
   credits: process.env.CREDITS_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCAIRDbCANzQYGu3vQA99zVAXuw_Brrgq6CWaW3YbmRRCU',
-  kb: process.env.KB_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCj174EGyAtQ6clqACoLu_yAaSPnXTVoMmSdINHGakVWRU',
+  kb: process.env.KB_URL || 'https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/elsaid_zaki_gto_org_uk/IQDRm5MVVCi3QZPYHMDlHTYTAYohlhdIhvHRb7r5Tgs25gI',
 };
 const AI_KEY = process.env.ANTHROPIC_API_KEY || '';
 const AI_MODEL = process.env.AI_MODEL || 'claude-haiku-5-5';
@@ -695,7 +695,7 @@ async function saveKbBackup(sheets) {
 async function loadKb() {
   return cached('kb', 600e3, async () => {
     let source = 'live', sheets = {}, error = '';
-    try { const names = await sheetNames(URLS.kb); for (const n of names) sheets[n] = await sheetValues(URLS.kb, n); await saveKbBackup(sheets); }
+    try { const names = await sheetNames(URLS.kb); for (const n of names) sheets[n] = await sheetValues(URLS.kb, n); if (!Object.entries(sheets).some(([n, v]) => parseKbSheet(n, v || []).length)) throw new Error('no offers found in the sheet layout'); await saveKbBackup(sheets); }
     catch (e) {
       error = e.message; const b = await readKbBackup();
       if (!b) throw new HttpError(503, "The knowledge base workbook can't be opened by the portal (" + e.message.slice(0, 120) + '). Share the file with opsportal@gto.org.uk.');
