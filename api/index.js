@@ -252,12 +252,15 @@ async function caller(req, acc) {
   return { email: me.Email || email, name: me['Full Name'], role: me['Portal Role'], admin: yes(me['Portal Admin']), row: me };
 }
 const isMgr = u => MANAGER_ROLES.includes(u.role);
+// swaps: Duty Managers and above, plus anyone the admin ticks 'Can Approve Swaps' for. Rota edits: admins, the GM, or 'Can Edit Rota'.
+const canApproveSwaps = u => ['Duty Manager', 'General Manager'].includes(u.role) || yes(u.row['Can Approve Swaps']);
+const canEditRota = u => u.admin || u.role === 'General Manager' || yes(u.row['Can Edit Rota']);
 // every name a person goes by in the Leaves Tracker: their current name, plus earlier names kept in 'Previous Name' after a rename
 const nameKeys = p => [...new Set([p && p['Full Name'], ...String((p && p['Previous Name']) || '').split(';')].map(norm).filter(Boolean))];
 const teamEmails = (u, acc) => new Set(acc.rows.filter(r => r['Manager Email'] === u.email).map(r => r.Email).filter(Boolean));
 const seesAll = u => ['Duty Manager', 'General Manager', 'HR'].includes(u.role);
 const canRaiseForOthers = u => ['Team Leader', 'Duty Manager', 'General Manager'].includes(u.role);
-const publicPerson = r => ({ _i: r._i, Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], 'Team Leader': r['Team Leader'], 'Manager Email': r['Manager Email'], Team: r.Team, 'Tracker Role': r['Tracker Role'], 'Rota Name': r['Rota Name'], Active: r.Active, 'Roster Name': r['Roster Name'], 'Previous Name': r['Previous Name'], 'Quality Team': r['Quality Team'], _tl: r._tl });
+const publicPerson = r => ({ _i: r._i, Email: r.Email, 'Full Name': r['Full Name'], 'Portal Role': r['Portal Role'], 'Team Leader': r['Team Leader'], 'Manager Email': r['Manager Email'], Team: r.Team, 'Tracker Role': r['Tracker Role'], 'Rota Name': r['Rota Name'], Active: r.Active, 'Roster Name': r['Roster Name'], 'Previous Name': r['Previous Name'], 'Quality Team': r['Quality Team'], 'Can Approve Swaps': r['Can Approve Swaps'], 'Can Edit Rota': r['Can Edit Rota'], _tl: r._tl });
 
 /* ---------------- read: everything the page needs, filtered by role ---------------- */
 async function readData(u, acc, parts) {
@@ -274,13 +277,14 @@ async function readData(u, acc, parts) {
   const safe = (label, pr) => pr.catch(e => { out.warnings.push(`${label}: ${e.message}`); });
   if (want('attendance')) jobs.push(safe('Log-ins', loadAttendance().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.attendance = t; })));
   if (want('requests')) jobs.push(safe('Leave requests', loadRequests().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => r.Email === u.email || r['Submitted By'] === u.email || (u.role === 'Team Leader' && team.has(r.Email))); out.requests = t; })));
-  if (want('swaps')) jobs.push(safe('Swaps', loadSwaps().then(t => { t.rows = seesAll(u) ? t.rows : t.rows.filter(r => [r['Requester Email'], r['Teammate Email']].includes(u.email) || (u.role === 'Team Leader' && (team.has(r['Requester Email']) || team.has(r['Teammate Email'])))); out.swaps = t; })));
+  if (want('swaps')) jobs.push(safe('Swaps', loadSwaps().then(t => { t.rows = (seesAll(u) || canApproveSwaps(u)) ? t.rows : t.rows.filter(r => [r['Requester Email'], r['Teammate Email']].includes(u.email) || (u.role === 'Team Leader' && (team.has(r['Requester Email']) || team.has(r['Teammate Email'])))); out.swaps = t; })));
   if (want('tracker')) jobs.push(safe('Leaves Tracker', loadTracker().then(t => {
     const mine = new Set([norm(u.name), ...nameKeys(u.row)]);
     const items = isMgr(u) ? t.items : t.items.map(x => mine.has(x.n) ? x : { _i: -1, name: '', n: '', date: x.date, role: x.role, type: '', status: x.approved ? 'Approved' : x.status ? 'Other' : '', by: '', comment: '', approved: x.approved, pending: x.pending, cancelled: x.cancelled });
     out.tracker = { headers: [], items };
   })));
   if (want('balance')) jobs.push(safe('Leaves Tracker (Balance tab)', loadBalance().then(b => { out.balance = isMgr(u) ? b : Object.fromEntries([norm(u.name), ...nameKeys(u.row)].filter(k => b[k]).map(k => [k, b[k]])); })));
+  if (want('rotaedits')) jobs.push(safe('Schedule changes', loadRotaEdits().then(t => { out.rotaedits = { rows: t.rows.map(r => ({ Email: r.Email, Date: r.Date, Shift: r.Shift, Original: r.Original, Note: r.Note, 'Edited By': r['Edited By'], 'Edited At': r['Edited At'] })) }; })));
   if (want('weeks')) jobs.push(safe('Rota', loadWeeks().then(w => { out.weeks = w; })));
   await Promise.all(jobs);
   return out;
@@ -423,16 +427,43 @@ async function doSwap(u, acc, b) {
 async function doSwapUpdate(u, b, decide) {
   const t = await loadSwapsRaw(); const r = t.rows.find(x => x.ID === b.id); if (!r) bad('Swap not found.'); if (r.Status !== 'Pending') bad('This swap is no longer pending.');
   let patch;
-  if (decide) { if (u.role !== 'Duty Manager') deny('Only a Duty Manager can approve swaps.'); if ([r['Requester Email'], r['Teammate Email']].includes(u.email)) deny("You can't approve a swap you're part of."); patch = { Status: b.ok ? 'Approved' : 'Declined', 'Decided By': u.email, 'Decided At': new Date().toISOString(), Note: String(b.note || '').slice(0, 300) }; }
+  if (decide) { if (!canApproveSwaps(u)) deny('You are not set up to approve swaps. Ask a portal admin.'); if ([r['Requester Email'], r['Teammate Email']].includes(u.email)) deny("You can't approve a swap you're part of."); patch = { Status: b.ok ? 'Approved' : 'Declined', 'Decided By': u.email, 'Decided At': new Date().toISOString(), Note: String(b.note || '').slice(0, 300) }; }
   else { if (r['Requester Email'] !== u.email) deny(); patch = { Status: 'Cancelled' }; }
   Object.assign(r, patch); await setRow(URLS.portal, T.swap, r._i, t.headers.map(k => r[k] ?? ''));
   return { ok: true };
+}
+const REDIT_HEADERS = ['ID', 'Email', 'Name', 'Date', 'Shift', 'Original', 'Note', 'Edited By', 'Edited At'];
+async function loadRotaEditsRaw() {
+  await ensureTable(URLS.portal, 'Rota Edits', 'tblRotaEdits', REDIT_HEADERS);
+  const t = await table(URLS.portal, 'tblRotaEdits');
+  t.rows = t.rows.filter(r => r.ID && r.Email); t.rows.forEach(r => { r.Email = normEmail(r.Email); r.Date = toKey(r.Date); r['Edited At'] = tsString(r['Edited At']); });
+  return t;
+}
+const loadRotaEdits = () => cached('rotaedits', 15000.0, loadRotaEditsRaw);
+async function doRotaEdit(u, acc, b) {
+  if (!canEditRota(u)) deny('You are not set up to change the schedule. Ask a portal admin.');
+  const who = acc.rows.find(r => r.Email === normEmail(b.email)); if (!who || isNo(who.Active)) bad('Person not found.');
+  if (!isKey(b.date)) bad('Pick a date.');
+  const shift = String(b.shift || '').trim().slice(0, 120); if (!shift) bad('Enter a shift (for example 09:00-18:00) or choose Day off.');
+  const t = await loadRotaEditsRaw();
+  const row = { ID: uid('R'), Email: who.Email, Name: who['Full Name'], Date: b.date, Shift: shift, Original: String(b.original || '').slice(0, 120), Note: String(b.note || '').slice(0, 300), 'Edited By': u.email, 'Edited At': new Date().toISOString() };
+  const old = t.rows.find(r => r.Email === who.Email && r.Date === b.date);
+  if (old) { row.ID = old.ID; row.Original = old.Original; await setRow(URLS.portal, 'tblRotaEdits', old._i, rowFor(t.headers, row)); }
+  else await addRow(URLS.portal, 'tblRotaEdits', rowFor(t.headers, row));
+  forget('rotaedits'); return { ok: true };
+}
+async function doRotaEditClear(u, b) {
+  if (!canEditRota(u)) deny('You are not set up to change the schedule. Ask a portal admin.');
+  const t = await loadRotaEditsRaw(); const r = t.rows.find(x => x.Email === normEmail(b.email) && x.Date === b.date); if (!r) return { ok: true };
+  const bk = await book(URLS.portal); await g('DELETE', `${bk}/tables/tblRotaEdits/rows/itemAt(index=${r._i})`);
+  forget('rotaedits'); return { ok: true };
 }
 async function doAccess(u, accCached, b) {
   if (!u.admin) deny('Only portal admins can edit the access list.');
   let acc = await loadAccessRaw();
   const o = b.row || {};
   if (!String(o['Full Name'] || '').trim()) bad('Name is required.');
+  for (const c of ['Can Approve Swaps', 'Can Edit Rota']) if (!acc.headers.includes(c) && c in o) { await ensureAccessColumn(acc, c); acc = await loadAccessRaw(); }
   if (o['Portal Role'] && !ROLES.includes(o['Portal Role'])) bad('Unknown role.');
   const old = Number.isInteger(o._i) && o._i >= 0 ? acc.rows.find(x => x._i === o._i) : null;
   const renamed = old && norm(old['Full Name']) !== norm(o['Full Name']);
@@ -910,7 +941,7 @@ async function doSetting(u, b) {
   return { ok: true, settings: await loadSettings() };
 }
 // tables that hold work done in the portal; test mode puts rows in them, going live removes the rows created since test mode started
-const RESET_TABLES = [[T.req, 'Submitted At', 'leave requests'], [T.swap, 'Submitted At', 'swap requests'], [T.att, 'Timestamp', 'attendance records'], ['tblDisputes', 'Raised At', 'disputes'], ['tblUpdates', 'Posted At', 'updates'], ['tblAskLog', 'Asked At', 'assistant questions'], ['tblCreditLog', 'Viewed At', 'client lookups']];
+const RESET_TABLES = [[T.req, 'Submitted At', 'leave requests'], [T.swap, 'Submitted At', 'swap requests'], [T.att, 'Timestamp', 'attendance records'], ['tblDisputes', 'Raised At', 'disputes'], ['tblRotaEdits', 'Edited At', 'schedule changes'], ['tblUpdates', 'Posted At', 'updates'], ['tblAskLog', 'Asked At', 'assistant questions'], ['tblCreditLog', 'Viewed At', 'client lookups']];
 async function doGoLive(u, b) {
   if (!u.admin) deny();
   const st = await loadSettings(); if (!isTestMode(st)) bad('Test mode is not on.');
@@ -977,6 +1008,8 @@ export default async function handler(req, res) {
       case 'swapdecide': out = await doSwapUpdate(u, b, true); break;
       case 'swapcancel': out = await doSwapUpdate(u, b, false); break;
       case 'access': out = await doAccess(u, acc, b); break;
+      case 'rotaedit': out = await doRotaEdit(u, acc, b); break;
+      case 'rotaeditclear': out = await doRotaEditClear(u, b); break;
       case 'quality': out = await readQuality(u, acc); break;
       case 'dispute': out = await doDispute(u, acc, b); break;
       case 'disputereview': out = await doDisputeReview(u, b); break;

@@ -217,7 +217,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
 .upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
 .credit-card{background:#fff;color:#14171c;border-radius:18px;padding:26px 28px;max-width:860px;box-shadow:0 10px 40px rgba(0,0,0,.35)}.credit-card .cc-head{display:flex;gap:16px;align-items:center;padding-bottom:16px;border-bottom:3px solid #c9a24a}.credit-card .cc-head img{width:54px;height:54px;border-radius:50%;object-fit:cover;background:#0b0d11}.credit-card h3{margin:0;font-size:22px;color:#14171c}.credit-card .cc-head p{margin:4px 0 0;display:flex;gap:10px;flex-wrap:wrap}.credit-card .cc-head span{background:#f2ecdc;color:#5b4713;border-radius:999px;padding:3px 12px;font-size:13.5px;font-weight:600}.credit-card table{width:100%;border-collapse:collapse;margin-top:6px}.credit-card th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6a7078;padding:12px 10px;border-bottom:1px solid #e3e5e8}.credit-card td{padding:13px 10px;border-bottom:1px solid #eceef0;font-size:15px;color:#14171c;vertical-align:top}.credit-card .num{text-align:right;white-space:nowrap}.credit-card td.num b{font-size:18px}.credit-card .cr-t small{display:block;color:#6a7078;font-size:12.5px;margin-top:2px}.credit-card .cr-past{color:#b3261e;font-weight:600}.credit-card .cr-none{color:#9aa0a8}.credit-card .cc-foot{margin-top:14px;font-size:12px;color:#6a7078}.cr-list{display:flex;flex-direction:column;gap:6px}.cr-row{display:grid;grid-template-columns:2fr 1fr 1.3fr auto;gap:12px;align-items:center;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line,#2a2e36);background:transparent;color:inherit;cursor:pointer;font:inherit}.cr-row:hover{border-color:var(--gold,#c9a24a);background:rgba(201,162,74,.08)}@media (max-width:820px){.cr-row{grid-template-columns:1fr 1fr}.credit-card{padding:18px}}
-.testbar{background:#3a2a05;color:#f5d27a;border-bottom:1px solid #6b4d10;padding:9px 36px;font-size:13.5px}.testbar b{background:#f5d27a;color:#3a2a05;border-radius:6px;padding:2px 8px;margin-right:8px;letter-spacing:.06em}.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
+.sched td.canedit{cursor:pointer}.sched td.canedit:hover{outline:1px solid var(--accent,#c9a24b)}.sched td.edited{box-shadow:inset 3px 0 0 var(--warn,#e0a030);font-weight:600}.testbar{background:#3a2a05;color:#f5d27a;border-bottom:1px solid #6b4d10;padding:9px 36px;font-size:13.5px}.testbar b{background:#f5d27a;color:#3a2a05;border-radius:6px;padding:2px 8px;margin-right:8px;letter-spacing:.06em}.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
 @keyframes upin{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}@keyframes upring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){.upnote,.upnote .ic{animation:none}}
 @media (max-width:820px){.upnote{top:auto;bottom:92px;right:16px;left:16px;max-width:none}}
@@ -730,22 +730,28 @@ class Data {
   }
   async addSwap(o){ const t = await this.swaps(); if (t.missing) throw new Error('The data file has no "Swaps" table yet. Use the latest GTO Portal Data.xlsx.'); await this.s.addRow(CONFIG.portalDataUrl, T.swap, t.headers.map(k=>o[k]??'')); await this.swaps(true); }
   async updateSwap(id, patch){ const t = await this.swaps(true); const r = t.rows.find(x=>x.ID===id); if (!r) throw new Error('Swap not found'); Object.assign(r, patch); await this.s.setRow(CONFIG.portalDataUrl, T.swap, r._i, t.headers.map(k=>r[k]??'')); await this.swaps(true); }
+  async rotaEdits(){ return { rows:[] }; }
   async overrides(){
     if (this.cache.ov) return this.cache.ov;
     const sw = (await this.swaps()).rows.filter(r=>r.Status==='Approved'); const acc = await this.people(); const ov = new Map();
+    const edits = new Map(((await this.rotaEdits()).rows||[]).map(e=>[e.Email+'|'+e.Date, e]));
+    // an edit made before a swap was approved is part of what gets swapped
+    const basis = async (P, date, at) => { const e = edits.get(P.Email+'|'+dkey(date)); return e && String(e['Edited At']||'') < String(at||'') ? e.Shift : (await this.baseShift(P,date)).text; };
     for (const r of sw){
       const A = acc.find(x=>x.Email===r['Requester Email']), B = acc.find(x=>x.Email===r['Teammate Email']); if (!A||!B) continue;
+      const at = r['Decided At'] || '';
       for (const d of [...new Set([r['Requester Date'], r['Teammate Date']])]){
-        const date = fromKey(d); const a = (await this.baseShift(A,date)).text, b = (await this.baseShift(B,date)).text;
-        ov.set(A.Email+'|'+d, { text:b, swap:r, with:B['Full Name'] }); ov.set(B.Email+'|'+d, { text:a, swap:r, with:A['Full Name'] });
+        const date = fromKey(d); const a = await basis(A,date,at), b = await basis(B,date,at);
+        ov.set(A.Email+'|'+d, { text:b, swap:r, with:B['Full Name'], at }); ov.set(B.Email+'|'+d, { text:a, swap:r, with:A['Full Name'], at });
       }
     }
+    for (const [k,e] of edits){ const cur = ov.get(k); if (!cur || String(e['Edited At']||'') >= String(cur.at||'')) ov.set(k, { text:e.Shift, edit:e }); }
     return this.cache.ov = ov;
   }
   async shiftFor(person, date){
     const base = await this.baseShift(person, date);
     const o = person.Email ? (await this.overrides()).get(person.Email+'|'+dkey(date)) : null;
-    return o ? { ...base, text:o.text, original:base.text, swapWith:o.with } : base;
+    return o ? { ...base, text:o.text, original:base.text, swapWith:o.with, edited:!!o.edit, editNote:o.edit?o.edit.Note:'' } : base;
   }
   async people(){ return (await this.access()).rows; }
   async baseShift(person, date){
@@ -776,6 +782,7 @@ class ApiData extends Data {
     if (d.attendance){ d.attendance.rows.forEach(r=>r.ts=new Date(r.Timestamp)); this.cache.att = d.attendance; }
     if (d.requests) this.cache.req = d.requests;
     if (d.swaps){ this.cache.sw = d.swaps; this.cache.ov = null; }
+    if (d.rotaedits){ this.cache.re = d.rotaedits; this.cache.ov = null; }
     if (d.tracker) this.cache.tr = d.tracker;
     if (d.balance){ for (const k in d.balance){ const b=d.balance[k]; if (b){ b.start=b.start&&fromKey(b.start); b.allowanceStart=b.allowanceStart&&fromKey(b.allowanceStart); } } this.cache.bal = d.balance; }
     if (d.weeks) this.cache.weeks = d.weeks.map(w=>({ name:w.name, start:fromKey(w.start) }));
@@ -783,7 +790,7 @@ class ApiData extends Data {
   async load(parts){
     const d = await this.call('GET','data',null, parts?{parts:parts.join(',')}:null);
     const want = p => !parts || parts.includes(p);
-    const empty = { attendance:{headers:[],rows:[]}, requests:{headers:[],rows:[]}, swaps:{headers:[],rows:[]}, tracker:{headers:[],items:[]}, balance:{}, weeks:[] };
+    const empty = { attendance:{headers:[],rows:[]}, requests:{headers:[],rows:[]}, swaps:{headers:[],rows:[]}, rotaedits:{rows:[]}, tracker:{headers:[],items:[]}, balance:{}, weeks:[] };
     for (const k in empty) if (want(k) && d[k]===undefined) d[k] = empty[k];
     this.warnings = d.warnings || [];
     this.absorb(d);
@@ -799,6 +806,9 @@ class ApiData extends Data {
   async attendance(force){ if (force || !this.cache.att) await this.load(['attendance']); return this.cache.att; }
   async requests(force){ if (force || !this.cache.req) await this.load(['requests']); return this.cache.req; }
   async swaps(force){ if (force || !this.cache.sw) await this.load(['swaps']); return this.cache.sw; }
+  async rotaEdits(force){ if (force || !this.cache.re) await this.load(['rotaedits']); return this.cache.re; }
+  async editShift(o){ await this.call('POST','rotaedit',o); await this.rotaEdits(true); }
+  async clearShift(o){ await this.call('POST','rotaeditclear',o); await this.rotaEdits(true); }
   async tracker(force){ if (force || !this.cache.tr) await this.load(['tracker']); return this.cache.tr; }
   async balance(){ if (!this.cache.bal) await this.load(['balance']); return this.cache.bal; }
   async rotaWeeks(){ if (!this.cache.weeks) await this.load(['weeks']); return this.cache.weeks; }
@@ -952,7 +962,9 @@ const PAGES = { kb:['Updates','Team updates, promotions and products — with GT
 const creditsMode = () => { const v=String((S.settings||{}).ClientCredits??'Everyone').trim().toLowerCase(); return /^(off|no|0|disabled)/.test(v)?'Off':/lead/.test(v)?'Leads':'Everyone'; };
 const testMode = () => /^(on|yes|true|1)$/i.test(String((S.settings||{}).TestMode??'').trim());
 const creditsOn = u => { const m=creditsMode(); return m==='Everyone' || (m==='Leads' && ['Team Leader','Duty Manager','General Manager','HR'].includes(u.role)); };
-const hasAppr = u => ['Team Leader','Duty Manager','General Manager'].includes(u.role);
+const canSwaps = u => ['Duty Manager','General Manager'].includes(u.role) || yes((u.row||{})['Can Approve Swaps']);
+const canRota = u => !!u.admin || u.role==='General Manager' || yes((u.row||{})['Can Edit Rota']);
+const hasAppr = u => canSwaps(u) || ['Team Leader','Duty Manager','General Manager'].includes(u.role);
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
 function applyNavPin(){ const on=navPinned(); document.body.classList.toggle('nav-pinned', on); const b=$('#navpin'); if (b){ b.setAttribute('aria-pressed', on); b.title = on?'Let the menu hide':'Keep the menu open'; b.setAttribute('aria-label', b.title); } }
@@ -1364,7 +1376,7 @@ async function slotMap(){
   return map;
 }
 async function pendingForMe(){ return (await approvalQueue()).length; }
-async function swapQueue(){ if (S.me.role!=='Duty Manager') return []; return (await S.D.swaps()).rows.filter(r=>r.Status==='Pending' && r['Requester Email']!==S.me.email && r['Teammate Email']!==S.me.email); }
+async function swapQueue(){ if (!canSwaps(S.me)) return []; return (await S.D.swaps()).rows.filter(r=>r.Status==='Pending' && r['Requester Email']!==S.me.email && r['Teammate Email']!==S.me.email); }
 async function approvalQueue(){
   const u=S.me; const reqs=(await S.D.requests()).rows; const acc=(await S.D.access()).rows;
   const mgrOf = e => (acc.find(r=>r.Email===e)||{})['Manager Email'];
@@ -1570,22 +1582,39 @@ async function viewSchedule(){
   else {
     const mine = await Promise.all(days.map(d=>S.D.shiftFor(u.row,d)));
     const found = mine.some(x=>x.rota) ;
-    $('#mysched').innerHTML = found ? `<div class="week">${days.map((d,i)=>{ const m=mine[i]; const ps=parseShift(m.text); return `<div class="${dkey(d)===tk?'today':''} ${ps?'':'off'}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(m.text)}">${esc(ps?ps.label:(m.text||'—'))}</b>${m.swapWith?`<em class="swaptag">Swapped with ${esc(String(m.swapWith).split(/\s+/)[0])}</em>`:''}</div>`; }).join('')}</div>
+    $('#mysched').innerHTML = found ? `<div class="week">${days.map((d,i)=>{ const m=mine[i]; const ps=parseShift(m.text); return `<div class="${dkey(d)===tk?'today':''} ${ps?'':'off'}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(m.text)}">${esc(ps?ps.label:(m.text||'—'))}</b>${m.swapWith?`<em class="swaptag">Swapped with ${esc(String(m.swapWith).split(/\s+/)[0])}</em>`:m.edited?`<em class="swaptag">Changed by management</em>`:''}</div>`; }).join('')}</div>
       <p class="muted" style="margin:10px 0 0;font-size:13px">Full shift text and tasks are shown when you hover a day.</p>`
       : `<div class="alert warn" style="margin:0">You aren't in this week's rota under a name the portal recognises. Ask your Duty Manager to set your "Rota Name" in the Access list.</div>`;
   }
   await swapForm(); await paintMySwaps();
   if (isMgr(u) && rota){
     if (!rota.idx) rota.idx = buildRotaIndex((await S.D.access()).rows, rota.people);
-    const cell = (txt,k) => `<td class="${!txt||/^off/i.test(txt)?'off':''} ${k===tk?'today':''}">${esc(txt||'—')}</td>`;
-    const acc=(await S.D.access()).rows; const deptOf=new Map(); for (const a of acc){ const rp=rota.idx.get(a.Email||a['Full Name']); if (rp) deptOf.set(rp, a.Team||''); }
+    const acc=(await S.D.access()).rows; const deptOf=new Map(), emailOf=new Map(); for (const a of acc){ const rp=rota.idx.get(a.Email||a['Full Name']); if (rp){ deptOf.set(rp, a.Team||''); if (a.Email) emailOf.set(rp, a.Email); } }
+    const ov=await S.D.overrides(); const editable=canRota(u);
+    const cell = (p,k) => { const em=emailOf.get(p); const o=em&&ov.get(em+'|'+k); const txt=o?o.text:p.days[k]; const chg=o&&o.edit; const can=editable&&em;
+      return `<td class="${!txt||/^off/i.test(txt)?'off':''} ${k===tk?'today':''} ${chg?'edited':''} ${can?'canedit':''}" ${can?`data-ed="${esc(em)}" data-d="${k}" data-n="${esc(p.name)}" role="button" tabindex="0"`:''} title="${chg?'Changed by '+esc(o.edit['Edited By'])+(o.edit.Note?': '+esc(o.edit.Note):''):can?'Click to change':''}">${esc(txt||'—')}</td>`; };
     const depts=[...new Set([...deptOf.values()].filter(Boolean))].sort(); const sel=$('#sdept');
     sel.innerHTML='<option value="">All departments</option>'+depts.map(d=>`<option>${esc(d)}</option>`).join('')+(rota.people.some(p=>!deptOf.get(p))?'<option value="__none">Not linked to a department</option>':'');
     sel.value=S.schedDept&&[...sel.options].some(o=>o.value===S.schedDept)?S.schedDept:'';
     const paint=()=>{ const q=norm(($('#sq')||{}).value||''); S.schedDept=sel.value; const list=rota.people.filter(p=>(!sel.value||(sel.value==='__none'?!deptOf.get(p):deptOf.get(p)===sel.value))&&(!q||norm(p.name).includes(q)||norm(p.team).includes(q)));
-      $('#fullrota').innerHTML = `<table class="sched"><thead><tr><th>Name</th><th>Block</th>${days.map(d=>`<th>${fmtDate(d)}</th>`).join('')}</tr></thead><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="muted">${esc(p.team)}</td>${days.map(d=>cell(p.days[dkey(d)],dkey(d))).join('')}</tr>`).join('')}</tbody></table>`; };
+      $('#fullrota').innerHTML = `<table class="sched"><thead><tr><th>Name</th><th>Block</th>${days.map(d=>`<th>${fmtDate(d)}</th>`).join('')}</tr></thead><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="muted">${esc(p.team)}</td>${days.map(d=>cell(p,dkey(d))).join('')}</tr>`).join('')}</tbody></table>`;
+      if (editable) document.querySelectorAll('#fullrota [data-ed]').forEach(td=>{ td.onclick=()=>editShiftModal(td.dataset.ed, td.dataset.d, td.dataset.n, td.textContent.trim()); td.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); td.click(); } }; }); };
     paint(); $('#sq').oninput=paint; sel.onchange=paint;
   }
+}
+async function editShiftModal(email, date, name, current){
+  const ov=await S.D.overrides(); const o=ov.get(email+'|'+date); const person=(await S.D.people()).find(x=>x.Email===email)||{Email:email,'Full Name':name};
+  const base=(await S.D.baseShift(person,fromKey(date))).text;
+  modal(`<h2>${esc(name)}</h2><p class="muted" style="margin:0 0 10px">${fmtDate(fromKey(date))}. Now: <b>${esc(current)}</b>${o&&o.edit?` <span class="muted">(rota says ${esc(base||'—')})</span>`:''}</p>
+    <label class="f">New shift (for example 09:00-18:00)</label><input class="i" id="esh" value="${esc(current==='—'?'':current)}" maxlength="120">
+    <div class="row" style="margin:8px 0"><button class="btn sm" id="eoff">Day off</button></div>
+    <label class="f">Reason (optional, visible to managers)</label><input class="i" id="enote" maxlength="300" value="${esc(o&&o.edit?o.edit.Note||'':'')}">
+    <p class="muted" style="font-size:13px;margin:10px 0 0">This changes what the portal shows for this person on this day. The Excel rota itself is not touched.</p>
+    <div class="row" style="margin-top:16px">${o&&o.edit?'<button class="btn" id="erest">Restore rota</button>':''}<span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="esave">Save change</button></div>`);
+  $('#eoff').onclick=()=>{ $('#esh').value='OFF'; };
+  const done=async fn=>{ try{ await fn(); closeModal(); toast('Schedule updated'); viewSchedule(); }catch(e){ alertBox(e); } };
+  $('#esave').onclick=()=>{ const sh=$('#esh').value.trim(); if(!sh) return toast('Enter a shift or choose Day off'); $('#esave').disabled=true; done(()=>S.D.editShift({ email, date, shift:sh, note:$('#enote').value.trim(), original:base })); };
+  const rs=$('#erest'); if (rs) rs.onclick=()=>done(()=>S.D.clearShift({ email, date }));
 }
 function wireSched(){ const wk=$('#swk'); if (wk) wk.onchange=async()=>{ const w=((await S.D.rotaWeeks())||[]).find(x=>x.name===wk.value); if (!w) return; S.schedOffset=Math.round((mondayOf(w.start)-mondayOf(new Date()))/(7*864e5)); viewSchedule(); };
   $('#sp').onclick=()=>{S.schedOffset--;viewSchedule();}; $('#sn').onclick=()=>{S.schedOffset++;viewSchedule();}; }
@@ -1674,7 +1703,7 @@ async function paintSwapQueue(list){
 async function viewApprovals(){
   const u=S.me; const v=$('#view'); S.appr = S.appr || { sub:'leave' };
   const queue=await approvalQueue(); const sq=await swapQueue();
-  const subs=[['leave','Leave approvals',queue.length]].concat(u.role==='Duty Manager'?[['swaps','Swap approvals',sq.length]]:[]);
+  const subs=[['leave','Leave approvals',queue.length]].concat(canSwaps(u)?[['swaps','Swap approvals',sq.length]]:[]);
   if (!subs.some(x=>x[0]===S.appr.sub)) S.appr.sub='leave';
   v.innerHTML=`<div class="kb-row" role="tablist" aria-label="Approvals" style="margin:0 0 14px">${subs.map(([k,l,n])=>`<button class="pill ${S.appr.sub===k?'on':''}" data-asub="${k}" role="tab" aria-selected="${S.appr.sub===k}">${l}${n?` <span class="badge" style="position:static;margin-left:6px">${n}</span>`:''}</button>`).join('')}</div><div id="apprbody"></div>`;
   document.querySelectorAll('[data-asub]').forEach(b=>b.onclick=()=>{ S.appr.sub=b.dataset.asub; viewApprovals(); });
@@ -2255,7 +2284,7 @@ function editPerson(r){
     ${f('Portal Role','Portal role',`<select class="i" data-k="Portal Role"><option value="">—</option>${ROLES.map(x=>`<option ${r['Portal Role']===x?'selected':''}>${x}</option>`).join('')}</select>`)}
     ${f('Team Leader','Team leader',`<select class="i" data-k="Team Leader"><option value="">—</option>${t.rows.filter(x=>['Team Leader','Duty Manager','General Manager','HR'].includes(x['Portal Role'])).map(x=>`<option value="${esc(x['Full Name'])}" ${norm(r._tl||r['Team Leader'])===norm(x['Full Name'])?'selected':''}>${esc(x['Full Name'])} (${esc(x['Portal Role'])})</option>`).join('')}</select>`)}
     ${f('Team','Team')}${f('Tracker Role','Role written in the Leaves Tracker (e.g. Enquiry Agent)')}${f('Rota Name','Name in the rota (only if not found automatically)')}
-    <div class="row">${f('Quality Team','Quality team',`<select class="i" data-k="Quality Team"><option ${yes(r['Quality Team'])?'':'selected'}>No</option><option ${yes(r['Quality Team'])?'selected':''}>Yes</option></select>`)}${f('Portal Admin','Portal admin',`<select class="i" data-k="Portal Admin"><option ${yes(r['Portal Admin'])?'':'selected'}>No</option><option ${yes(r['Portal Admin'])?'selected':''}>Yes</option></select>`)}${f('Active','Active',`<select class="i" data-k="Active"><option ${/^no$/i.test(String(r.Active||''))?'':'selected'}>Yes</option><option ${/^no$/i.test(String(r.Active||''))?'selected':''}>No</option></select>`)}</div>
+    <div class="row">${f('Quality Team','Quality team',`<select class="i" data-k="Quality Team"><option ${yes(r['Quality Team'])?'':'selected'}>No</option><option ${yes(r['Quality Team'])?'selected':''}>Yes</option></select>`)}${f('Can Approve Swaps','Can approve swaps (Duty Managers and above always can)',`<select class="i" data-k="Can Approve Swaps"><option ${yes(r['Can Approve Swaps'])?'':'selected'}>No</option><option ${yes(r['Can Approve Swaps'])?'selected':''}>Yes</option></select>`)}${f('Can Edit Rota','Can change the schedule (admins and the GM always can)',`<select class="i" data-k="Can Edit Rota"><option ${yes(r['Can Edit Rota'])?'':'selected'}>No</option><option ${yes(r['Can Edit Rota'])?'selected':''}>Yes</option></select>`)}${f('Portal Admin','Portal admin',`<select class="i" data-k="Portal Admin"><option ${yes(r['Portal Admin'])?'':'selected'}>No</option><option ${yes(r['Portal Admin'])?'selected':''}>Yes</option></select>`)}${f('Active','Active',`<select class="i" data-k="Active"><option ${/^no$/i.test(String(r.Active||''))?'':'selected'}>Yes</option><option ${/^no$/i.test(String(r.Active||''))?'selected':''}>No</option></select>`)}</div>
     <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="psave">Save</button></div>`);
   $('#psave').onclick=async()=>{
     const o={...r}; delete o._tl; document.querySelectorAll('.modal [data-k]').forEach(i=>o[i.dataset.k]=i.value.trim());
