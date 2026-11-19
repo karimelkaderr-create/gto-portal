@@ -217,7 +217,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
 .upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
 .credit-card{background:#fff;color:#14171c;border-radius:18px;padding:26px 28px;max-width:860px;box-shadow:0 10px 40px rgba(0,0,0,.35)}.credit-card .cc-head{display:flex;gap:16px;align-items:center;padding-bottom:16px;border-bottom:3px solid #c9a24a}.credit-card .cc-head img{width:54px;height:54px;border-radius:50%;object-fit:cover;background:#0b0d11}.credit-card h3{margin:0;font-size:22px;color:#14171c}.credit-card .cc-head p{margin:4px 0 0;display:flex;gap:10px;flex-wrap:wrap}.credit-card .cc-head span{background:#f2ecdc;color:#5b4713;border-radius:999px;padding:3px 12px;font-size:13.5px;font-weight:600}.credit-card table{width:100%;border-collapse:collapse;margin-top:6px}.credit-card th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6a7078;padding:12px 10px;border-bottom:1px solid #e3e5e8}.credit-card td{padding:13px 10px;border-bottom:1px solid #eceef0;font-size:15px;color:#14171c;vertical-align:top}.credit-card .num{text-align:right;white-space:nowrap}.credit-card td.num b{font-size:18px}.credit-card .cr-t small{display:block;color:#6a7078;font-size:12.5px;margin-top:2px}.credit-card .cr-past{color:#b3261e;font-weight:600}.credit-card .cr-none{color:#9aa0a8}.credit-card .cc-foot{margin-top:14px;font-size:12px;color:#6a7078}.cr-list{display:flex;flex-direction:column;gap:6px}.cr-row{display:grid;grid-template-columns:2fr 1fr 1.3fr auto;gap:12px;align-items:center;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line,#2a2e36);background:transparent;color:inherit;cursor:pointer;font:inherit}.cr-row:hover{border-color:var(--gold,#c9a24a);background:rgba(201,162,74,.08)}@media (max-width:820px){.cr-row{grid-template-columns:1fr 1fr}.credit-card{padding:18px}}
-.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
+.testbar{background:#3a2a05;color:#f5d27a;border-bottom:1px solid #6b4d10;padding:9px 36px;font-size:13.5px}.testbar b{background:#f5d27a;color:#3a2a05;border-radius:6px;padding:2px 8px;margin-right:8px;letter-spacing:.06em}.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
 @keyframes upin{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}@keyframes upring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){.upnote,.upnote .ic{animation:none}}
 @media (max-width:820px){.upnote{top:auto;bottom:92px;right:16px;left:16px;max-width:none}}
@@ -949,6 +949,9 @@ const ICON = {
   out:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h11"/></svg>'
 };
 const PAGES = { kb:['Updates','Team updates, promotions and products — with GTO Assist to answer your questions.'], quality:['Quality','Chat evaluations and disputes.'], home:['Home',''], att:['Log in','Clock in, take your break and clock out.'], credits:['Client credits','Look up a client to see their credits, notice period and balance.'],appr:['Approvals','Leave and swap requests waiting for your decision.'],act:['Agent activity','Day-by-day activity, live status, shift-start attendance check and hours reports.'], leave:['Leaves','Your balance, leave requests and who is off.'], sched:['Schedule','Shifts from the current rota.'], admin:['Access list','Who can use the portal and what they can do.'] };
+const creditsMode = () => { const v=String((S.settings||{}).ClientCredits??'Everyone').trim().toLowerCase(); return /^(off|no|0|disabled)/.test(v)?'Off':/lead/.test(v)?'Leads':'Everyone'; };
+const testMode = () => /^(on|yes|true|1)$/i.test(String((S.settings||{}).TestMode??'').trim());
+const creditsOn = u => { const m=creditsMode(); return m==='Everyone' || (m==='Leads' && ['Team Leader','Duty Manager','General Manager','HR'].includes(u.role)); };
 const hasAppr = u => ['Team Leader','Duty Manager','General Manager'].includes(u.role);
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
@@ -956,11 +959,11 @@ function applyNavPin(){ const on=navPinned(); document.body.classList.toggle('na
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
   const myRender = S.renderId = (S.renderId||0) + 1;
-  const agent = !isMgr(u); if (agent && (S.tab==='att'||S.tab==='act')) S.tab='home'; if (S.tab==='appr' && !hasAppr(u)) S.tab='home';
+  const agent = !isMgr(u); if (agent && (S.tab==='att'||S.tab==='act')) S.tab='home'; if (S.tab==='appr' && !hasAppr(u)) S.tab='home'; if (S.tab==='credits' && !creditsOn(u)) S.tab='home';
   const pend = await pendingForMe();
   const alerts = isMgr(u) ? (await emergencyAlerts()).length : 0;
   const swapsWaiting = (await swapQueue()).length;
-  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],['credits','Client credits'],['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['act','Agent activity'],...(hasAppr(u)?[['appr','Approvals']]:[]),['leave','Leaves'],['sched','Schedule'],['credits','Client credits'],['quality','Quality'],['kb','Updates']];
+  const tabs = agent ? [['home','Home'],['leave','Leaves'],['sched','Schedule'],...(creditsOn(u)?[['credits','Client credits']]:[]),['quality','Quality'],['kb','Updates']] : [['home','Home'],['att','Log in'],['act','Agent activity'],...(hasAppr(u)?[['appr','Approvals']]:[]),['leave','Leaves'],['sched','Schedule'],...(creditsOn(u)?[['credits','Client credits']]:[]),['quality','Quality'],['kb','Updates']];
   if (u.admin) tabs.push(['admin','Access']);
   const hour=new Date().getHours(); const greet = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const [title, sub] = S.tab==='home' ? [`${greet}, ${esc(String(u.name).split(/\s+/)[0])}`, isMgr(u)?'Here is what needs your attention today.':'Here is your day.'] : PAGES[S.tab];
@@ -975,6 +978,7 @@ async function render(){
       <div class="mtop"><img src="${LOGO}" alt="GTO"><b>GTO</b><span class="muted" style="font-size:13px">Operations portal</span><div class="av" title="${esc(u.name)}">${esc(initials(u.name))}</div></div>
       ${DEMO?`<div class="demo"><b>Demo</b> Sample people only, nothing is saved. Viewing as
         <select id="demoAs" class="i">${(await S.D.access()).rows.map(r=>`<option value="${r.Email}" ${r.Email===S.demoAs?'selected':''}>${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select></div>`:''}
+      ${testMode()?'<div class="testbar" role="status"><b>TEST MODE</b> Everything works as normal, but nothing is written to the Leaves Tracker or the rota, and everything created during the test is cleared when the portal goes live.</div>':''}
       ${agent?'<div class="statusbar" id="statusbar" role="region" aria-label="Your status"></div>':''}
       <header class="ph">${S.tab!=='home'?`<div class="ph-ic" aria-hidden="true">${ICON[S.tab]}</div>`:''}<div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
       ${S.D && S.D.warnings && S.D.warnings.length ? `<div style="padding:0 36px;max-width:1300px"><div class="alert warn" style="margin:14px 0 0"><b>Some data couldn't be loaded:</b> ${S.D.warnings.map(esc).join(' · ')}</div></div>` : ''}
@@ -1917,7 +1921,7 @@ function handleUpdates(list){
 }
 function startUpdatePoll(){
   if (S._upPoll || DEMO || !(S.D instanceof ApiData)) return; S._upPoll=true;
-  const check = async () => { try { const r=await S.D.call('GET','updates'); handleUpdates(r.updates||[]); } catch(e){} };
+  const check = async () => { try { const r=await S.D.call('GET','updates'); applyFlags(r.flags); handleUpdates(r.updates||[]); } catch(e){} };
   check(); setInterval(check, UPDATE_POLL_MS);
   document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) check(); });
 }
@@ -1966,6 +1970,12 @@ function startOpsAlerts(){
   const run=async()=>{ if (document.hidden) return; try{ await checkOpsAlerts(); }catch(e){} };
   setTimeout(run,4000); setInterval(run, ALERT_POLL_MS);
   document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) run(); });
+}
+function applyFlags(f){
+  if (!f || !S.settings) return;
+  const before=creditsMode()+'|'+testMode();
+  S.settings.ClientCredits=f.credits; S.settings.TestMode=f.test?'On':'Off';
+  if (before!==creditsMode()+'|'+testMode() && !document.querySelector('.modal')) render();
 }
 function kbSeen(){ try { return localStorage.getItem('gto.kbSeen')||''; } catch(e){ return ''; } }
 function kbMarkSeen(){ try { localStorage.setItem('gto.kbSeen', new Date().toISOString()); } catch(e){} }
@@ -2213,7 +2223,11 @@ async function viewHome(){
 /* ============================ Admin (Access list) ============================ */
 async function viewAdmin(){
   const v=$('#view'); const t=await S.D.access(true);
-  v.innerHTML = `<div class="card"><div class="row"><h2 style="margin:0">People</h2><span class="spacer"></span><input id="adq" class="i" style="width:220px" placeholder="Search"><select id="adr" class="i" style="width:auto"><option value="">All roles</option><option value="none">No role yet</option>${ROLES.map(r=>`<option>${r}</option>`).join('')}</select><button class="btn primary" id="adnew">Add person</button></div>
+  const tm=testMode();
+  v.innerHTML = `<div class="card sec" style="margin-top:0"><h2>Portal controls</h2>
+    <div class="row" style="gap:14px;align-items:center;margin:8px 0"><div style="flex:1;min-width:220px"><b>Client credits</b><div class="muted" style="font-size:13px">Who can open the Client credits tab. Changes reach people within about a minute.</div></div><select id="ctl-cr" class="i" style="width:auto"><option value="Everyone">On for everyone</option><option value="Leads">Leads and above only</option><option value="Off">Off for everyone</option></select></div>
+    <div class="row" style="gap:14px;align-items:center;margin:14px 0 0;padding-top:14px;border-top:1px solid var(--line,#2a2e36)"><div style="flex:1;min-width:220px"><b>Testing phase</b> ${tm?'<span class="chip warn">Test mode is ON</span>':'<span class="chip ok">Live</span>'}<div class="muted" style="font-size:13px">${tm?'Nothing is written to the Leaves Tracker or the rota. Going live clears every leave request, swap, attendance record, dispute, update, assistant question and client lookup created since test mode started, so the portal matches your sheets again.':'Turn on test mode while the team tries the portal. Approved leave is not written to the Leaves Tracker, and the test data can be cleared in one go.'}</div></div>${tm?'<button class="btn primary" id="ctl-live">Go live (reset)</button>':'<button class="btn" id="ctl-test">Start test mode</button>'}</div></div>
+    <div class="card"><div class="row"><h2 style="margin:0">People</h2><span class="spacer"></span><input id="adq" class="i" style="width:220px" placeholder="Search"><select id="adr" class="i" style="width:auto"><option value="">All roles</option><option value="none">No role yet</option>${ROLES.map(r=>`<option>${r}</option>`).join('')}</select><button class="btn primary" id="adnew">Add person</button></div>
     <p class="muted">Everyone who can open the portal. This is the same list as the Access tab in "GTO Portal Data.xlsx", so you can edit it in either place.</p><div class="tablewrap" id="adt"></div></div>`;
   const paint=()=>{ const q=norm($('#adq').value), rf=$('#adr').value;
     const list=t.rows.filter(r=>(!q||norm(r['Full Name']+' '+r.Email+' '+r.Team).includes(q)) && (!rf||(rf==='none'?!ROLES.includes(r['Portal Role']):r['Portal Role']===rf)));
@@ -2221,6 +2235,16 @@ async function viewAdmin(){
     document.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>editPerson(t.rows.find(x=>x._i===+b.dataset.ed)));
   };
   paint(); $('#adq').oninput=paint; $('#adr').onchange=paint; $('#adnew').onclick=()=>editPerson(null);
+  const cr=$('#ctl-cr'); cr.value=creditsMode();
+  cr.onchange=async()=>{ try{ await S.D.call('POST','setting',{key:'ClientCredits',value:cr.value}); S.settings.ClientCredits=cr.value; toast('Client credits updated'); }catch(e){ alertBox(e); cr.value=creditsMode(); } };
+  const ts=$('#ctl-test'); if (ts) ts.onclick=async()=>{ if (!confirm('Start test mode?\n\nLeave approvals will not be written to the Leaves Tracker, and a banner shows on every page. Everything created while testing can be cleared when you go live.')) return; try{ await S.D.call('POST','setting',{key:'TestMode',value:'On'}); S.settings.TestMode='On'; toast('Test mode is on'); render(); }catch(e){ alertBox(e); } };
+  const gl=$('#ctl-live'); if (gl) gl.onclick=async()=>{ try{
+    gl.disabled=true; const pre=await S.D.call('POST','golive',{dryRun:true});
+    const list=pre.counts.length?pre.counts.map(c=>c.n+' '+c.label).join(', '):'nothing';
+    if (!confirm('Go live?\n\nThis permanently removes what was created since test mode started: '+list+'.\n\nYour sheets, the rota and the Access list are not touched.')){ gl.disabled=false; return; }
+    let r; do { r=await S.D.call('POST','golive',{}); gl.textContent='Clearing… '+r.remaining+' left'; } while (!r.live);
+    S.settings.TestMode='Off'; S.D.clearCache && S.D.clearCache(); toast('Live. Test data cleared'); await boot();
+  }catch(e){ alertBox(e); gl.disabled=false; } };
 }
 function editPerson(r){
   const t=S.D.cache.access; const isNew=!r; r = r || {Active:'Yes','Portal Admin':'No'};

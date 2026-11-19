@@ -195,7 +195,7 @@ async function loadAccessRaw() {
   t.rows.forEach(r => { const tl = r['Team Leader'] ? (byName.get(norm(r['Team Leader'])) || findLeader(r['Team Leader'], t.rows)) : null; r._tl = tl ? tl['Full Name'] : (r['Team Leader'] || ''); if (!r['Manager Email'] && tl) r['Manager Email'] = tl.Email; });
   return t;
 }
-async function loadSettings() { return cached('settings', 300000.0, loadSettingsRaw); }
+async function loadSettings() { return cached('settings', 60000.0, loadSettingsRaw); }
 async function loadSettingsRaw() { const t = await table(URLS.portal, T.set); const o = { BreakMinutes: 60, EmergencyLimit: 6, LateGraceMinutes: 5, LeaveYear: new Date().getFullYear() }; t.rows.forEach(r => { if (r.Key) o[String(r.Key).trim()] = isNaN(+r.Value) ? r.Value : +r.Value; }); return o; }
 async function loadAttendance() { return cached('att', 15000.0, loadAttendanceRaw); }
 async function loadAttendanceRaw() { const t = await tableTail(URLS.portal, T.att, 20000); t.rows = t.rows.filter(r => r.ID).map(r => ({ ...r, Email: normEmail(r.Email), 'Shift Date': toKey(r['Shift Date']), Timestamp: tsString(r.Timestamp) })); return t; }
@@ -358,6 +358,7 @@ async function doRequest(u, acc, b) {
 }
 async function updateReq(t, r, patch) { Object.assign(r, patch); await setRow(URLS.portal, T.req, r._i, t.headers.map(k => k === 'Dates' ? r.dateList.join(', ') : (r[k] ?? ''))); }
 async function writeTracker(t, r, acc) {
+  if (isTestMode(await loadSettings())) { await updateReq(t, r, { 'Written To Tracker': 'Test' }); return; } // test mode: the Leaves Tracker is left alone
   const tr = await table(URLS.tracker, TRACKER_TABLE); const H = tr.headers;
   let lastFilled = -1; tr.rows.forEach(x => { if (H.some(h => x[h] !== '' && x[h] != null)) lastFilled = x._i; });
   let next = lastFilled + 1; const by = (acc.rows.find(x => x.Email === r['Submitted By']) || {})['Full Name'] || r['Submitted By'];
@@ -726,7 +727,8 @@ async function loadUpdates() {
 const canPost = u => u.admin || ['Team Leader', 'Duty Manager', 'General Manager', 'HR', 'Quality'].includes(u.role);
 async function readUpdates() {
   const up = await cached('updates', 30e3, loadUpdates);
-  return { updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))) };
+  const st = await loadSettings();
+  return { flags: { test: isTestMode(st), credits: creditsMode(st) }, updates: up.rows.filter(r => !isNo(r.Active)).sort((a, b) => (yes(b.Pinned) - yes(a.Pinned)) || String(b['Posted At']).localeCompare(String(a['Posted At']))) };
 }
 async function readKb(u) {
   const [kb, up] = await Promise.all([loadKbView(), cached('updates', 30e3, loadUpdates)]);
@@ -867,6 +869,7 @@ async function loadCredits() {
   const v = parseCredits(r); v.at = new Date().toISOString(); creditsMemo = { at: Date.now(), v, ttl: r.viaFile ? 300e3 : 60e3 }; return v;
 }
 async function readCredits(u, q) {
+  if (!creditsAllowed(u, await loadSettings())) deny('Client credits is not switched on for your role.');
   const data = await loadCredits(); const qs = sNorm(q), qd = digitsOf(q);
   if (qs.length < 2 && qd.length < 4) return { clients: [], hint: 'Type at least 2 letters of the name, or 4 digits of the number.', updatedAt: data.at, dateLabel: data.dateLabel, balanceLabel: data.balanceLabel };
   const toks = qs.split(' ').filter(Boolean);
@@ -877,6 +880,7 @@ async function readCredits(u, q) {
 }
 const CREDITLOG_HEADERS = ['ID', 'Viewed At', 'Email', 'Name', 'Role', 'Client', 'Client ID'];
 async function doCreditView(u, b) {
+  if (!creditsAllowed(u, await loadSettings())) deny('Client credits is not switched on for your role.');
   try { await ensureTable(URLS.portal, 'Credit Lookups', 'tblCreditLog', CREDITLOG_HEADERS); await addRow(URLS.portal, 'tblCreditLog', [uid('V'), new Date().toISOString(), u.email, u.name, u.role, String(b.name || '').slice(0, 120), String(b.id || '').slice(0, 40)]); }
   catch (e) { console.error('credit log', e.message); }
   return { ok: true };
@@ -885,6 +889,47 @@ async function readCreditLog(u) {
   if (!isMgr(u)) deny();
   if (!(await tableExists(URLS.portal, 'tblCreditLog'))) return { rows: [] };
   const t = await table(URLS.portal, 'tblCreditLog'); return { rows: t.rows.filter(r => r.ID).map(r => ({ ...r, 'Viewed At': tsString(r['Viewed At']) })).reverse().slice(0, 100) };
+}
+
+
+/* ---------------- portal controls (portal admins): feature switches and test mode ---------------- */
+const creditsMode = st => { const v = String(st.ClientCredits ?? 'Everyone').trim().toLowerCase(); return /^(off|no|0|disabled)/.test(v) ? 'Off' : /lead/.test(v) ? 'Leads' : 'Everyone'; };
+const isTestMode = st => /^(on|yes|true|1)$/i.test(String(st.TestMode ?? '').trim());
+const creditsAllowed = (u, st) => { const m = creditsMode(st); return m === 'Everyone' || (m === 'Leads' && LEADS.includes(u.role)); };
+async function putSetting(key, value) {
+  const t = await table(URLS.portal, T.set); const row = t.rows.find(r => String(r.Key).trim() === key);
+  const vals = t.headers.map(h => h === 'Key' ? key : h === 'Value' ? value : (row ? row[h] ?? '' : ''));
+  if (row) await setRow(URLS.portal, T.set, row._i, vals); else await addRow(URLS.portal, T.set, vals);
+  forget('settings');
+}
+async function doSetting(u, b) {
+  if (!u.admin) deny();
+  if (b.key === 'ClientCredits') { if (!['Off', 'Leads', 'Everyone'].includes(b.value)) bad('Choose Off, Leads or Everyone.'); await putSetting('ClientCredits', b.value); }
+  else if (b.key === 'TestMode') { if (b.value !== 'On') bad('Test mode is turned off with "Go live".'); await putSetting('TestStartedAt', new Date().toISOString()); await putSetting('TestMode', 'On'); }
+  else bad('Unknown setting.');
+  return { ok: true, settings: await loadSettings() };
+}
+// tables that hold work done in the portal; test mode puts rows in them, going live removes the rows created since test mode started
+const RESET_TABLES = [[T.req, 'Submitted At', 'leave requests'], [T.swap, 'Submitted At', 'swap requests'], [T.att, 'Timestamp', 'attendance records'], ['tblDisputes', 'Raised At', 'disputes'], ['tblUpdates', 'Posted At', 'updates'], ['tblAskLog', 'Asked At', 'assistant questions'], ['tblCreditLog', 'Viewed At', 'client lookups']];
+async function doGoLive(u, b) {
+  if (!u.admin) deny();
+  const st = await loadSettings(); if (!isTestMode(st)) bad('Test mode is not on.');
+  const start = Date.parse(st.TestStartedAt); if (isNaN(start)) bad('The time test mode started is missing, so nothing can be safely reset. Check the TestStartedAt setting.');
+  const plan = [];
+  for (const [name, col, label] of RESET_TABLES) {
+    if (!(await tableExists(URLS.portal, name))) continue;
+    const t = await table(URLS.portal, name);
+    const idx = t.rows.filter(r => r.ID && Date.parse(tsString(r[col])) >= start).map(r => r._i);
+    if (idx.length) plan.push({ name, label, idx });
+  }
+  const total = plan.reduce((n, p) => n + p.idx.length, 0);
+  if (b.dryRun) return { counts: plan.map(p => ({ label: p.label, n: p.idx.length })), total };
+  const bk = await book(URLS.portal); let done = 0;
+  outer: for (const p of plan) for (const i of [...p.idx].sort((a, c) => c - a)) { if (done >= 40) break outer; await g('DELETE', `${bk}/tables/${encodeURIComponent(p.name)}/rows/itemAt(index=${i})`); p.idx = p.idx.filter(x => x !== i); done++; }
+  const remaining = plan.reduce((n, p) => n + p.idx.length, 0);
+  Object.keys(memo).forEach(k => delete memo[k]);
+  if (!remaining) { await putSetting('TestMode', 'Off'); await putSetting('TestStartedAt', ''); }
+  return { deleted: done, remaining, live: !remaining };
 }
 
 /* ---------------- one-time setup for the opsportal account ---------------- */
@@ -946,6 +991,8 @@ export default async function handler(req, res) {
       case 'credits': out = await readCredits(u, String(req.query.q || '')); break;
       case 'creditview': out = await doCreditView(u, b); break;
       case 'creditlog': out = await readCreditLog(u); break;
+      case 'setting': out = await doSetting(u, b); break;
+      case 'golive': out = await doGoLive(u, b); break;
       default: throw new HttpError(404, 'Unknown request.');
     }
     ({ att: ['att'], req: ['req'], decide: ['req', 'tracker'], cancel: ['req'], retry: ['req', 'tracker'], swap: ['swaps'], swapdecide: ['swaps'], swapcancel: ['swaps'], access: ['access'], update: ['updates'], kbedit: ['kbedits'] }[route] || []).forEach(k => forget(k));
