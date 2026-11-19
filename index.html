@@ -1788,7 +1788,7 @@ async function qualityData(force){
 }
 async function viewQuality(){
   S.qtab = S.qtab||'evals';
-  const bar = () => `<div class="kb-row" role="tablist" aria-label="Quality" id="qtabs" style="margin:0 0 14px"><button class="pill ${S.qtab==='evals'?'on':''}" data-qt="evals" role="tab">Evaluations</button><button class="pill ${S.qtab==='guides'?'on':''}" data-qt="guides" role="tab">Playbook and guides</button></div>`;
+  const bar = () => `<div class="kb-row" role="tablist" aria-label="Quality" id="qtabs" style="margin:0 0 14px"><button class="pill ${S.qtab==='evals'?'on':''}" data-qt="evals" role="tab">${isMgr(S.me)?'Evaluations':'My score'}</button><button class="pill ${S.qtab==='guides'?'on':''}" data-qt="guides" role="tab">${isMgr(S.me)?'Playbook and guides':'Guides'}</button></div>`;
   if (S.qtab==='guides') await viewQaLib(); else await viewQualityEvals();
   const v=$('#view'); v.insertAdjacentHTML('afterbegin', bar());
   document.querySelectorAll('#qtabs [data-qt]').forEach(b=>b.onclick=()=>{ S.qtab=b.dataset.qt; viewQuality(); });
@@ -1798,7 +1798,7 @@ async function viewQaLib(){
   let lib; try{ lib = await S.D.call('GET','qalib'); }catch(e){ v.innerHTML=`<div class="alert bad">The guides couldn't be loaded: ${esc(e.message)}</div>`; return; }
   const F = S.qa = S.qa||{ q:'' };
   const fmtSz = n => n>1e6 ? (n/1e6).toFixed(1)+' MB' : Math.round(n/1e3)+' KB';
-  v.innerHTML = `<div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Playbook and guides</h2><span class="spacer"></span><input id="qaq" class="i" style="width:240px" placeholder="Search the guides" value="${esc(F.q)}">${lib.canManage?'<button class="btn primary" id="qaup">Add a guide</button><input type="file" id="qafile" accept=".docx,.pptx" hidden>':''}</div>
+  v.innerHTML = `<div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">${lib.canManage?'Playbook and guides':'Guides'}</h2><span class="spacer"></span><input id="qaq" class="i" style="width:240px" placeholder="Search the guides" value="${esc(F.q)}">${lib.canManage?'<button class="btn primary" id="qaup">Add a guide</button><input type="file" id="qafile" accept=".docx,.pptx" hidden>':''}</div>
     <p class="muted" style="margin:0 0 12px;font-size:13.5px">GTO Assist uses these guides when it advises on offers.</p><div id="qalist"></div></div>`;
   const paint=()=>{ F.q=$('#qaq').value; const q=norm(F.q);
     const docs=lib.docs.map(d=>({ d, secs:d.sections.map((sc,i)=>({sc,i})).filter(x=>!q||norm(x.sc.heading+' '+x.sc.text+' '+d.title).includes(q)) })).filter(x=>x.secs.length);
@@ -1833,10 +1833,9 @@ async function viewQualityEvals(){
     <div class="metrics">
       ${mgr ? `<div class="m"><h3>${u.role==='Team Leader'?'Team':'Overall'} average</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(avg(inMonth))]||'inherit'}">${qPct(avg(inMonth))}</div><p>${agentRows.length} agents evaluated</p></div>
                <div class="m"><h3>Below 80%</h3><div class="stat" style="${below?'color:var(--bad)':''}">${below}</div><p>agents needing coaching</p></div>`
-            : `<div class="m"><h3>My average</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(avg(inMonth))]||'inherit'}">${qPct(avg(inMonth))}</div><p>${esc(F.month)}</p></div>
-               <div class="m"><h3>Lowest score</h3><div class="stat">${inMonth.length?qPct(Math.min(...inMonth.map(e=>e.score))):'—'}</div><p>this month</p></div>`}
-      <div class="m"><h3>Evaluations</h3><div class="stat">${inMonth.length}</div><p>${inMonth.filter(e=>e.score>=1).length} perfect chats</p></div>
-      <div class="m"><h3>Open disputes</h3><div class="stat" style="${(openDisputes.length+withMgr.length)?'color:var(--warn)':''}">${q.canRespond?openDisputes.length:openDisputes.length+withMgr.length}</div><p>${q.canRespond?'waiting for the quality team':withMgr.length?withMgr.length+' with a manager, '+openDisputes.length+' with quality':'waiting for the quality team'}</p></div>
+            : `<div class="m"><h3>My average</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(avg(inMonth))]||'inherit'}">${qPct(avg(inMonth))}</div><p>${inMonth.length} chat${inMonth.length===1?'':'s'} reviewed in ${esc(F.month)}, ${inMonth.filter(e=>e.score>=1).length} perfect</p></div>`}
+      ${mgr?`<div class="m"><h3>Evaluations</h3><div class="stat">${inMonth.length}</div><p>${inMonth.filter(e=>e.score>=1).length} perfect chats</p></div>`:''}
+      ${mgr||(openDisputes.length+withMgr.length)?`<div class="m"><h3>Open disputes</h3><div class="stat" style="${(openDisputes.length+withMgr.length)?'color:var(--warn)':''}">${q.canRespond?openDisputes.length:openDisputes.length+withMgr.length}</div><p>${q.canRespond?'waiting for the quality team':withMgr.length?withMgr.length+' with a manager, '+openDisputes.length+' with quality':'waiting for the quality team'}</p></div>`:''}
     </div>
     ${toReview.length ? `<div class="card sec"><h2>Disputes waiting for your review <span class="muted" style="font-weight:500">${toReview.length}</span></h2><p class="muted" style="margin:-4px 0 10px;font-size:13.5px">Approve to send it to the quality team for reassessment, or decline to close it with a note to the agent.</p><div id="qmr"></div></div>`:''}
     ${q.canRespond && openDisputes.length ? `<div class="card sec"><h2>Disputes to review <span class="muted" style="font-weight:500">${openDisputes.length}</span></h2><div id="qdq"></div></div>`:''}
@@ -1848,8 +1847,8 @@ async function viewQualityEvals(){
     ${q.disputes.length ? `<div class="card sec"><h2>${mgr?'Disputes':'Disputes about my evaluations'}</h2><div id="qdisp"></div></div>`:''}`;
   const paintList = () => {
     const s=norm(F.q); const list = inMonth.filter(e=>(!F.who||(e.agentEmail||e.agent)===F.who) && (!F.tl||e.tl===F.tl) && (!s || norm(e.agentFull+' '+e.client).includes(s))).sort((a,b)=>a.date<b.date?1:-1);
-    $('#qlist').innerHTML = list.length ? `<div class="tablewrap" style="max-height:560px"><table><thead><tr><th>Chat date</th>${mgr?'<th>Agent</th>':''}<th>Client</th><th>Score</th><th>Errors</th><th>Inquiry</th><th>Dispute</th><th></th></tr></thead><tbody>${list.map(e=>{ const ds=openBy[e.id]||[]; const last=ds[ds.length-1];
-      return `<tr><td>${e.date?fmtDate(e.date):'—'}</td>${mgr?`<td>${esc(e.agentFull)}</td>`:''}<td class="muted">${esc(e.client)}</td><td><span class="chip ${qCls(e.score)}">${qPct(e.score)}</span></td><td>${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}" title="${esc(x.type)}">${esc(x.code)}</span>`).join('')||'<span class="muted">None</span>'}</td><td class="muted">${esc(e.inquiry)}</td><td>${last?dChip(last.Status):''}</td><td><button class="btn sm" data-ev="${esc(e.id)}">View</button></td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${mgr?'No evaluations match.':'You have no evaluations this month.'}</div>`;
+    $('#qlist').innerHTML = list.length ? `<div class="tablewrap" style="max-height:560px"><table><thead><tr><th>Chat date</th>${mgr?'<th>Agent</th>':''}<th>Client</th><th>Score</th><th>Errors</th>${mgr?'<th>Inquiry</th><th>Dispute</th>':''}<th></th></tr></thead><tbody>${list.map(e=>{ const ds=openBy[e.id]||[]; const last=ds[ds.length-1];
+      return `<tr><td>${e.date?fmtDate(e.date):'—'}</td>${mgr?`<td>${esc(e.agentFull)}</td>`:''}<td class="muted">${esc(e.client)}</td><td><span class="chip ${qCls(e.score)}">${qPct(e.score)}</span></td><td>${e.errors.map(x=>`<span class="chip ${x.code==='NCE'?'warn':'bad'}" title="${esc(x.type)}">${esc(x.code)}</span>`).join('')||'<span class="muted">None</span>'}</td>${mgr?`<td class="muted">${esc(e.inquiry)}</td><td>${last?dChip(last.Status):''}</td>`:''}<td>${!mgr&&last?dChip(last.Status)+' ':''}<button class="btn sm" data-ev="${esc(e.id)}">View</button></td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${mgr?'No evaluations match.':'You have no evaluations this month.'}</div>`;
     document.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>evalDetail(q, q.evals.find(e=>e.id===b.dataset.ev), openBy));
   };
   paintList();
