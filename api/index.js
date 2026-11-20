@@ -824,6 +824,7 @@ function parseKbSheet(name, v) {
     const nm = kbValue(v[nr][c], ''); if (!nm) continue;
     const it = { id: `${({ Promotion: 'PR', Product: 'PD', 'Posh Saver': 'PS' })[cat] || cat.slice(0, 2).toUpperCase()}${c}`, cat, sheet: name, order: c, name: nm.replace(/\s*\n\s*/g, ' '), fields: {} };
     fields.forEach(([r, f]) => { const val = kbValue((v[r] || [])[c], f); if (val) it.fields[f] = val; });
+    it.at = { c, rows: Object.fromEntries(fields.map(([r, f]) => [f, r])) };
     it.cover = KB_COVER.map(([label, rx]) => { const f = fields.find(([, x]) => rx.test(x)); return [label, f ? kbCover(it.fields[f[1]]) : null]; });
     const tc = Object.entries(it.fields).find(([k]) => /terms/i.test(k)); const link = tc && (tc[1].match(/https?:\/\/\S+/) || [])[0]; if (link) it.link = link.replace(/[)\].,]+$/, '');
     Object.assign(it, kbStatus(it)); items.push(it);
@@ -900,7 +901,20 @@ async function doKbEdit(u, b) {
   }
   r['Edited By'] = u.email; r['Edited At'] = new Date().toISOString();
   if (isNew) await addRow(URLS.portal, 'tblKbEdits', rowFor(t.headers, r)); else await setRow(URLS.portal, 'tblKbEdits', r._i, t.headers.map(k => r[k] ?? ''));
-  forget('kbedits'); ixCache = null; return { ok: true };
+  forget('kbedits'); ixCache = null;
+  // A correction made in the portal is also written into the offers workbook, so the sheet stays the single source of truth.
+  let sheetNote = '';
+  if (b.fields && typeof b.fields === 'object' && base.at && kb.source === 'live') {
+    const done = [], failed = [];
+    for (const [k, v] of Object.entries(b.fields)) {
+      const row = base.at.rows[k]; if (row == null || String(v ?? '') === base.fields[k]) continue;
+      try { await writeCell(URLS.kb, base.sheet, row, base.at.c, String(v ?? '').slice(0, 8000), true); done.push(k); }
+      catch (e) { failed.push(k); await syncLog('offer', key.slice(0, 60), 'Offer "' + base.name.slice(0, 60) + '": ' + k, 'Failed', e.message, u.email); }
+    }
+    if (done.length) { forget('kb'); await syncLog('offer', key.slice(0, 60), 'Offer "' + base.name.slice(0, 60) + '" updated in the sheet: ' + done.join(', '), 'Ok', 'Written to the offers workbook', u.email); }
+    sheetNote = failed.length ? 'failed' : done.length ? 'written' : '';
+  }
+  return { ok: true, sheet: sheetNote };
 }
 const UPDATE_HEADERS = ['ID', 'Posted At', 'Posted By', 'Posted By Name', 'Title', 'Body', 'Category', 'Pinned', 'Active', 'Edited At', 'Edited By', 'Sheet Col'];
 async function loadUpdates() {
