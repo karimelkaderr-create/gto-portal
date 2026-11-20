@@ -38,7 +38,7 @@ const serialToDate = n => { const u = new Date(Math.round((n - 25569) * 864e5));
 const dateToSerial = d => (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 864e5;
 const norm = s => String(s ?? '').replace(/\u00a0|\u202f/g, ' ').toLowerCase().replace(/\(.*?\)/g, m => ' ' + m.slice(1, -1) + ' ').replace(/[^a-z\u0600-\u06ff ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const normEmail = s => String(s ?? '').trim().toLowerCase();
-const yes = v => /^y(es)?$/i.test(String(v ?? '').trim()) || v === true;
+const yes = v => /^(y|yes|true|1|x|✓|✔|admin)$/i.test(String(v??'').trim()) || v===true || v===1;
 const isNo = v => /^no$/i.test(String(v ?? '').trim());
 const uid = p => p + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
 const isKey = k => /^\d{4}-\d{2}-\d{2}$/.test(String(k || ''));

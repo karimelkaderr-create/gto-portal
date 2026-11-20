@@ -452,7 +452,7 @@ function parseDateCell(v){
 const norm = s => String(s??'').replace(/\u00a0|\u202f/g,' ').toLowerCase().replace(/\(.*?\)/g,m=>' '+m.slice(1,-1)+' ').replace(/[^a-z\u0600-\u06ff ]+/g,' ').replace(/\s+/g,' ').trim();
 const normEmail = s => String(s??'').trim().toLowerCase();
 const uid = p => p + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
-const yes = v => /^y(es)?$/i.test(String(v??'').trim()) || v===true;
+const yes = v => /^(y|yes|true|1|x|✓|✔|admin)$/i.test(String(v??'').trim()) || v===true || v===1;
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
 function rowsToObjects(values){ const h = values[0].map(x=>String(x??'').trim()); return { headers:h, rows: values.slice(1).map((r,i)=>{ const o={_i:i}; h.forEach((k,j)=>o[k]=r[j]); return o; }) }; }
 
@@ -942,7 +942,7 @@ async function boot(){
     if (!me || /^no$/i.test(String(me.Active||'').trim()) || !ROLES.includes(String(me['Portal Role']).trim())){
       $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(email)} ${me&&!ROLES.includes(String(me['Portal Role']).trim())?'is on the list but has no portal role':'isn\'t on the portal\'s access list'}. Ask your Duty Manager to add you, then refresh this page.</p></div></main>`; return;
     }
-    S.me = { email, name: me['Full Name'], role: String(me['Portal Role']).trim(), row: me, admin: yes(me['Portal Admin']) };
+    S.me = { email, name: me['Full Name'], role: String(me['Portal Role']).trim(), row: me, admin: yes(me['Portal Admin']) || !!(S.D.me && S.D.me.admin) };
     S.real = S.me; S.viewAs = null;
     render();
   } catch(e){ console.error(e); $('#app').innerHTML = `<div class="loading"><b>Something went wrong while loading.</b><br>${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div>`; }
