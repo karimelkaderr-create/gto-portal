@@ -269,7 +269,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 /* assistant */
 .ai-fab{transition:top .35s cubic-bezier(.2,.8,.2,1),box-shadow .2s,transform .2s;position:fixed;right:28px;bottom:28px;z-index:45;display:flex;align-items:center;gap:10px;padding:13px 20px 13px 16px;border-radius:999px;border:0;cursor:pointer;background:var(--gold-grad);color:var(--gold-ink);font-weight:700;font-size:15px;box-shadow:0 12px 34px rgba(227,185,90,.35),0 0 0 1px rgba(255,255,255,.2) inset}
 .ai-fab svg,.ai-head svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.ai-fab:hover{filter:brightness(1.06)}
+.ai-fab:hover{filter:brightness(1.06)}.ai-open .ai-fab{opacity:0;pointer-events:none}
 .ai-panel{position:fixed;top:0;right:0;bottom:0;width:min(470px,100vw);z-index:60;display:flex;flex-direction:column;background:rgba(17,19,23,.92);border-left:1px solid var(--edge-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);box-shadow:-30px 0 80px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .25s ease}
 .ai-panel.open{transform:none}
 .ai-head{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--edge)}
@@ -1002,7 +1002,7 @@ async function render(){
   $('#navpin') && ($('#navpin').onclick = e=>{ e.stopPropagation(); const v=!navPinned(); try{ localStorage.setItem('gto.navPinned', v?'1':''); }catch(_){} applyNavPin(); });
   applyNavPin();
   $('#demoAs') && ($('#demoAs').onchange = e=>{ S.demoAs=e.target.value; S.tab='home'; boot(); });
-  startUpdatePoll(); startOpsAlerts();
+  startUpdatePoll(); startOpsAlerts(); ensureAiFab();
   if (agent) await mountStatusBar();
   try {
     await ({home:viewHome, att:viewAttendance, act:viewActivity, appr:viewApprovals, credits:viewCredits, leave:viewLeave, sched:viewSchedule, quality:viewQuality, kb:viewKb, admin:viewAdmin}[S.tab])();
@@ -2057,8 +2057,7 @@ async function viewKb(){
         <div id="kbups"></div></div>
         ${kb.canEditKb&&kb.hidden&&kb.hidden.length?`<div class="card" style="margin-top:14px"><h2 style="margin:0 0 4px;font-size:16px">Deleted topics <span class="muted" style="font-weight:500">${kb.hidden.length}</span></h2><p class="muted" style="margin:0 0 8px;font-size:12.5px">Hidden from the portal and the assistant. The workbook is untouched.</p>${kb.hidden.map(h=>`<div class="row" style="padding:6px 0;border-top:1px solid var(--edge)"><span style="font-size:13.5px;flex:1;min-width:0">${esc(h.name)}</span><button class="btn sm" data-kbrestore="${esc(h.key)}">Restore</button></div>`).join('')}</div>`:''}
         ${kb.seesLog?`<div class="card" style="margin-top:14px"><h2 style="margin:0 0 4px;font-size:16px">Questions GTO Assist couldn't answer</h2><p class="muted" style="margin:0 0 8px;font-size:12.5px">Add the missing details to the knowledge base sheet so it can answer them next time.</p><div id="kblog" class="muted" style="font-size:13.5px">Loading…</div></div>`:''}</aside>
-    </div>
-    <button class="ai-fab" id="aifab">${KBI.spark}<span>Ask GTO Assist</span></button>`;
+    </div>`;
   const paint = () => {
     const toks = norm(F.q).split(' ').filter(Boolean);
     let list = kb.items.filter(i => (!F.cat || i.cat===F.cat) && (F.cov<0 || (i.cover[F.cov]||[])[1]===true)
@@ -2094,17 +2093,6 @@ async function viewKb(){
   $('#kbsort').onchange=e=>{ F.sort=e.target.value; paint(); };
   $('#kbpost') && ($('#kbpost').onclick=()=>kbPostForm());
   document.querySelectorAll('[data-kbrestore]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await S.D.call('POST','kbedit',{ key:b.dataset.kbrestore, hide:false }); toast('Topic restored'); await kbData(true); viewKb(); }catch(e){ alertBox(e); b.disabled=false; } });
-  $('#aifab').onclick=()=>aiOpen();
-    (function followScroll(){
-      const fab=$('#aifab'); if(!fab) return; let tk=false;
-      const place=()=>{ tk=false; if(!fab.isConnected){ window.removeEventListener('scroll',place,true); window.removeEventListener('resize',place); return; }
-        const h=fab.offsetHeight||48, vh=window.innerHeight, base=window.innerWidth<=820?96:28;
-        const max=document.documentElement.scrollHeight-vh; const p=max>0?Math.min(1,Math.max(0,(window.scrollY||0)/max)):0;
-        const top=Math.round(100+p*Math.max(0,vh-h-base-100));
-        fab.style.bottom='auto'; fab.style.top=top+'px'; };
-      const req=()=>{ if(!tk){ tk=true; requestAnimationFrame(place); } };
-      window.addEventListener('scroll',req,true); window.addEventListener('resize',req); place();
-    })();
   paint(); paintUps();
   if (kb.seesLog && S.D instanceof ApiData) S.D.call('GET','asklog').then(r=>{ const el=$('#kblog'); if (!el || S.renderId!==myRender) return; el.innerHTML = r.rows.length ? r.rows.slice(0,15).map(x=>`<div class="kb-up" style="padding:9px 0"><div style="color:var(--ink);font-size:13.5px;unicode-bidi:plaintext">${esc(x.Question)}</div><div class="by">${esc(x.Name||x.Email)} · ${fmtDate(parseTs(x['Asked At']))} · ${esc(x['Answer Type'])}</div></div>`).join('') : 'None so far.'; }).catch(()=>{ const el=$('#kblog'); if (el) el.textContent='Not available.'; });
   else if ($('#kblog')) $('#kblog').textContent='None so far.';
@@ -2184,6 +2172,18 @@ function aiMd(text){
   if (list) out.push(`<ul>${list.join('')}</ul>`);
   return out.join('');
 }
+/* The assistant button lives on every page, not just Updates, and glides down the edge as the page scrolls. */
+function ensureAiFab(){
+  let fab=$('#aifab');
+  if (!fab){ fab=document.createElement('button'); fab.className='ai-fab'; fab.id='aifab'; fab.setAttribute('aria-label','Ask GTO Assist'); fab.innerHTML=`${KBI.spark}<span>Ask GTO Assist</span>`; fab.onclick=()=>aiOpen(); document.body.appendChild(fab); }
+  if (S._aiFabWired) { S._aiFabPlace && S._aiFabPlace(); return; }
+  S._aiFabWired=true; let tk=false;
+  const place=()=>{ tk=false; const f=$('#aifab'); if(!f) return; const h=f.offsetHeight||48, vh=window.innerHeight, base=window.innerWidth<=820?96:28;
+    const max=document.documentElement.scrollHeight-vh; const p=max>0?Math.min(1,Math.max(0,(window.scrollY||0)/max)):0;
+    f.style.bottom='auto'; f.style.top=Math.round(100+p*Math.max(0,vh-h-base-100))+'px'; };
+  S._aiFabPlace=place; const req=()=>{ if(!tk){ tk=true; requestAnimationFrame(place); } };
+  window.addEventListener('scroll',req,true); window.addEventListener('resize',req); place();
+}
 function aiOpen(prefill, send){
   let p=$('#aipanel');
   if (!p){ p=document.createElement('div'); p.id='aipanel'; p.className='ai-panel'; p.setAttribute('role','dialog'); p.setAttribute('aria-label','GTO Assist');
@@ -2192,16 +2192,17 @@ function aiOpen(prefill, send){
       <div class="ai-foot"><div class="ai-in"><textarea id="aiq" rows="1" placeholder="Ask about an offer, product or rule…"></textarea><button id="aisend" aria-label="Send">${KBI.send}</button></div>
       <div class="ai-note"><span>Check important details in the T&amp;Cs before confirming with a member.</span><button id="aiclear">New chat</button></div></div>`;
     document.body.appendChild(p);
-    $('#aiclose').onclick=()=>p.classList.remove('open');
+    const shut=()=>{ p.classList.remove('open'); document.body.classList.remove('ai-open'); };
+    $('#aiclose').onclick=shut;
     $('#aiclear').onclick=()=>{ S.aiChat=[]; S.aiCtx=null; aiPaint(); };
     const q=$('#aiq'); q.oninput=()=>{ q.style.height='auto'; q.style.height=Math.min(140,q.scrollHeight)+'px'; };
     q.onkeydown=e=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); aiSend(); } };
     $('#aisend').onclick=()=>aiSend();
     $('#aiq').setAttribute('dir','auto');
-    document.addEventListener('keydown', e=>{ if (e.key==='Escape') p.classList.remove('open'); });
+    document.addEventListener('keydown', e=>{ if (e.key==='Escape') shut(); });
   }
   S.aiChat = S.aiChat || []; aiPaint();
-  requestAnimationFrame(()=>p.classList.add('open'));
+  requestAnimationFrame(()=>{ p.classList.add('open'); document.body.classList.add('ai-open'); });
   if (prefill){ $('#aiq').value=prefill; if (send) aiSend(); }
   setTimeout(()=>$('#aiq').focus(),250);
 }
