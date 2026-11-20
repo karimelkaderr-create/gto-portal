@@ -1926,7 +1926,7 @@ const KBI = {
 const COV_SHORT = ['Refundable hotels','Non-refundable hotels','International flights','Domestic flights','Attractions & transfers','Theme parks & cars'];
 const KB_STATUS = { 'On sale':['ok','On sale'], 'Ended':['mute','Sale ended'], 'Always available':['info','Always available'], 'While quota lasts':['warn','While quota lasts'], 'Paused':['bad','Paused'] };
 const kbDate = k => fromKey(k).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-const canFixOffers = u => ['Duty Manager','General Manager'].includes(u.role) || /elsaid/i.test(norm(u.name)) && /zaki/i.test(norm(u.name)); // Elsaid Zaki owns the offers sheet
+const canFixOffers = u => ['Duty Manager','General Manager'].includes(u.role) || u.email==='elsaid.zaki@gto.org.uk' || (/elsaid/i.test(norm(u.name)) && /zaki/i.test(norm(u.name))); // Elsaid Zaki owns the offers sheet
 const kbNeedsCheck = it => it.status==='' || (/flash/i.test(it.name+' '+((it.fields||{})['Offer Period']||'')) && !it.end);
 const kbChip = it => { if (kbNeedsCheck(it) && it.status!=='Paused') return '<span class="chip bad" title="Ask a Duty Manager before offering this">Dates not confirmed</span>'; const s = KB_STATUS[it.status]; if (!s) return ''; const end = it.end ? ' '+kbDate(it.end) : ''; return `<span class="chip ${s[0]}">${s[1]}${it.status==='On sale'?' until'+end:it.status==='Ended'?end:''}</span>`; };
 const kbLead = it => it.fields['Benefit'] || it.fields['Discount Rate'] || Object.entries(it.fields).find(([k])=>!/promotion details/i.test(k))?.[1] || '';
