@@ -2063,7 +2063,7 @@ async function viewKb(){
     <section class="kb-hero">
       <div class="kb-search">${KBI.search}<input id="kbq" type="search" placeholder="Search offers, products, vouchers, rules… e.g. “Magic Pass expiry” or “flight club minimum”" value="${esc(F.q)}" autocomplete="off" aria-label="Search the knowledge base"></div>
       <div class="kb-row" role="group" aria-label="Category"><span class="lbl">Type</span>${['',...kb.cats].map(c=>`<button class="pill ${F.cat===c?'on':''}" data-cat="${esc(c)}">${c?esc(c==='Posh Saver'?c:c+'s'):'All'} <span class="n">${counts(c)}</span></button>`).join('')}</div>
-      <div class="kb-row" role="group" aria-label="Covers"><span class="lbl">Covers</span>${COV_SHORT.map((l,i)=>`<button class="pill ${F.cov===i?'on':''}" data-cov="${i}">${KBI.cov[i]}${l}</button>`).join('')}</div>
+      <div class="kb-row" role="group" aria-label="Covers"><span class="lbl">Covers</span>${COV_SHORT.map((l,i)=>`<button class="pill ${F.cov===i?'on':''}" data-cov="${i}">${KBI.cov[i]}${l}</button>`).join('')}<button class="pill ${F.live?'on':''}" data-live aria-pressed="${!!F.live}" title="Only offers that are on sale now"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>On sale now</button></div>
     </section>
     <div class="kb-layout">
       <div>
@@ -2078,7 +2078,7 @@ async function viewKb(){
     </div>`;
   const paint = () => {
     const toks = norm(F.q).split(' ').filter(Boolean);
-    let list = kb.items.filter(i => (!F.cat || i.cat===F.cat) && (F.cov<0 || (i.cover[F.cov]||[])[1]===true)
+    let list = kb.items.filter(i => (!F.cat || i.cat===F.cat) && (!F.live || (!kbNeedsCheck(i) && ['On sale','Always available','While quota lasts'].includes(i.status))) && (F.cov<0 || (i.cover[F.cov]||[])[1]===true)
       && (!F.status || (F.status==='Ended' ? i.status==='Ended' : ['On sale','Always available','While quota lasts'].includes(i.status))));
     if (toks.length){ const phrase=toks.join(' ');
       const scored = list.map(i=>{ const t=kbFieldText(i), n=norm(i.name); if (!toks.every(k=>t.includes(k))) return null; return [i, (n.includes(phrase)?100:0)+(t.includes(phrase)?20:0)+toks.reduce((a,k)=>a+(n.includes(k)?5:1),0)]; }).filter(Boolean);
@@ -2107,6 +2107,7 @@ async function viewKb(){
   let tmr; $('#kbq').oninput=e=>{ F.q=e.target.value; clearTimeout(tmr); tmr=setTimeout(paint,120); };
   $('#kbq').onkeydown=e=>{ if (e.key==='Enter' && !$('#kbgrid .kb-card') && F.q.trim()) aiOpen(F.q); };
   document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ F.cat=b.dataset.cat; viewKb(); });
+  document.querySelectorAll('[data-live]').forEach(b=>b.onclick=()=>{ F.live=!F.live; viewKb(); });
   document.querySelectorAll('[data-cov]').forEach(b=>b.onclick=()=>{ const k=+b.dataset.cov; F.cov=F.cov===k?-1:k; viewKb(); });
   $('#kbsort').onchange=e=>{ F.sort=e.target.value; paint(); };
   $('#kbpost') && ($('#kbpost').onclick=()=>kbPostForm());
