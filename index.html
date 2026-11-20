@@ -972,10 +972,10 @@ const hasAppr = u => canSwaps(u) || ['Team Leader','Duty Manager','General Manag
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
 function applyNavPin(){ const on=navPinned(); document.body.classList.toggle('nav-pinned', on); const b=$('#navpin'); if (b){ b.setAttribute('aria-pressed', on); b.title = on?'Let the menu hide':'Keep the menu open'; b.setAttribute('aria-label', b.title); } }
-function viewAsBar(acc){
-  const rows=acc.rows.filter(r=>r.Email && !/^no$/i.test(String(r.Active||'').trim()) && ROLES.includes(String(r['Portal Role']).trim())).sort((a,b)=>ROLES.indexOf(String(a['Portal Role']).trim())-ROLES.indexOf(String(b['Portal Role']).trim()) || String(a['Full Name']).localeCompare(String(b['Full Name'])));
-  const opts=ROLES.map(r=>{ const l=rows.filter(x=>String(x['Portal Role']).trim()===r); return l.length?`<optgroup label="${r}">${l.map(x=>`<option value="${esc(x.Email)}" ${S.viewAs===x.Email?'selected':''}>${esc(x['Full Name'])}</option>`).join('')}</optgroup>`:''; }).join('');
-  return `<div class="viewbar" role="region" aria-label="View as"><b>View as</b><select id="viewas" class="i"><option value="">Me (${esc(S.real.name)})</option>${opts}</select>${S.viewAs?`<span>Preview only. You see ${esc(S.me.name)}'s role and screens, and nothing can be saved.</span><button class="btn sm" id="viewback">Back to me</button>`:'<span class="muted">See how each role sees the portal.</span>'}</div>`;
+function viewAsCard(acc){
+  const rows=acc.rows.filter(r=>r.Email && !/^no$/i.test(String(r.Active||'').trim()) && ROLES.includes(String(r['Portal Role']).trim())).sort((x,y)=>ROLES.indexOf(String(x['Portal Role']).trim())-ROLES.indexOf(String(y['Portal Role']).trim()) || String(x['Full Name']).localeCompare(String(y['Full Name'])));
+  const opts=ROLES.map(r=>{ const l=rows.filter(x=>String(x['Portal Role']).trim()===r); return l.length?`<optgroup label="${r}">${l.map(x=>`<option value="${esc(x.Email)}">${esc(x['Full Name'])}</option>`).join('')}</optgroup>`:''; }).join('');
+  return `<div class="card sec" style="margin-top:0"><h2>View as</h2><div class="row" style="gap:14px;align-items:center"><div style="flex:1;min-width:220px"><b>See the portal as someone else</b><div class="muted" style="font-size:13px">Pick a person to see exactly which tabs and screens their role gets. It is preview only, so nothing can be saved while you view as them.</div></div><select id="viewas" class="i" style="width:auto;max-width:280px"><option value="">Choose a person…</option>${opts}</select></div></div>`;
 }
 function setViewAs(email){
   if (!email){ S.me=S.real; S.viewAs=null; }
@@ -1005,7 +1005,7 @@ async function render(){
       <div class="mtop"><img src="${LOGO}" alt="GTO"><b>GTO</b><span class="muted" style="font-size:13px">Operations portal</span><div class="av" title="${esc(u.name)}">${esc(initials(u.name))}</div></div>
       ${DEMO?`<div class="demo"><b>Demo</b> Sample people only, nothing is saved. Viewing as
         <select id="demoAs" class="i">${(await S.D.access()).rows.map(r=>`<option value="${r.Email}" ${r.Email===S.demoAs?'selected':''}>${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select></div>`:''}
-      ${S.real && S.real.admin ? viewAsBar(await S.D.access()) : ''}
+      ${S.viewAs ? `<div class="viewbar" role="status"><b>View as</b><span>Preview only. You see ${esc(S.me.name)}'s role and screens, and nothing can be saved.</span><button class="btn sm" id="viewback">Back to me</button></div>` : ''}
       ${testMode()?'<div class="testbar" role="status"><b>TEST MODE</b> Everything works as normal, but nothing is written to the Leaves Tracker or the rota, and everything created during the test is cleared when the portal goes live.</div>':''}
       ${agent?'<div class="statusbar" id="statusbar" role="region" aria-label="Your status"></div>':''}
       <header class="ph">${S.tab!=='home'?`<div class="ph-ic" aria-hidden="true">${ICON[S.tab]}</div>`:''}<div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
@@ -1014,7 +1014,6 @@ async function render(){
     </div>
   </div>`;
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
-  const va=$('#viewas'); if (va) va.onchange=()=>setViewAs(va.value);
   const vb=$('#viewback'); if (vb) vb.onclick=()=>setViewAs('');
   $('#signout') && ($('#signout').onclick = ()=>msalApp.logoutRedirect());
   $('#navpin') && ($('#navpin').onclick = e=>{ e.stopPropagation(); const v=!navPinned(); try{ localStorage.setItem('gto.navPinned', v?'1':''); }catch(_){} applyNavPin(); });
@@ -2328,7 +2327,7 @@ async function viewHome(){
 async function viewAdmin(){
   const v=$('#view'); const t=await S.D.access(true);
   const tm=testMode();
-  v.innerHTML = `<div class="card sec" style="margin-top:0"><h2>Portal controls</h2>
+  v.innerHTML = viewAsCard(t) + `<div class="card sec"><h2>Portal controls</h2>
     <div class="row" style="gap:14px;align-items:center;margin:8px 0"><div style="flex:1;min-width:220px"><b>Client credits</b><div class="muted" style="font-size:13px">Who can open the Client credits tab. Changes reach people within about a minute.</div></div><select id="ctl-cr" class="i" style="width:auto"><option value="Everyone">On for everyone</option><option value="Leads">Leads and above only</option><option value="Off">Off for everyone</option></select></div>
     <div class="row" style="gap:14px;align-items:center;margin:14px 0 0;padding-top:14px;border-top:1px solid var(--line,#2a2e36)"><div style="flex:1;min-width:220px"><b>Testing phase</b> ${tm?'<span class="chip warn">Test mode is ON</span>':'<span class="chip ok">Live</span>'}<div class="muted" style="font-size:13px">${tm?'Nothing is written to the Leaves Tracker or the rota. Going live clears every leave request, swap, attendance record, dispute, update, assistant question and client lookup created since test mode started, so the portal matches your sheets again.':'Turn on test mode while the team tries the portal. Approved leave is not written to the Leaves Tracker, and the test data can be cleared in one go.'}</div></div>${tm?'<button class="btn primary" id="ctl-live">Go live (reset)</button>':'<button class="btn" id="ctl-test">Start test mode</button>'}</div></div>
     <div class="card sec" id="syncbox"><h2>Backup sync</h2><p class="muted" style="margin:0">Checking…</p></div>
@@ -2344,6 +2343,7 @@ async function viewAdmin(){
     box.innerHTML=`<h2 style="margin-bottom:4px">Backup sync ${r.failed?`<span class="chip bad">${r.failed} need attention</span>`:'<span class="chip ok">All good</span>'}</h2><p class="muted" style="margin:0 0 10px;font-size:13.5px">Swaps, schedule changes, new people and updates are also written to the Excel files, so they stay complete if the portal is ever down. Every rota change is also listed on the Portal Changes tab in the rota file.</p>`+(r.rows.length?`<div class="tablewrap" style="max-height:260px"><table><thead><tr><th>When</th><th>What</th><th>Result</th><th></th></tr></thead><tbody>${r.rows.slice(0,15).map(x=>`<tr><td>${x.At?fmtDate(parseTs(x.At)):''}</td><td>${esc(kindL[x.Kind]||x.Kind)}: ${esc(x.Summary)}</td><td>${x.Status==='Failed'?`<span class="chip bad">Failed</span> <span class="muted" style="font-size:12.5px">${esc(x.Detail)}</span>`:'<span class="chip ok">Done</span>'}</td><td>${x.Status==='Failed'?`<button class="btn sm" data-sk="${esc(x.Kind)}" data-sr="${esc(x.Ref)}">Retry</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted" style="margin:0">Nothing has been synced yet.</p>');
     box.querySelectorAll('[data-sk]').forEach(bt=>bt.onclick=async()=>{ bt.disabled=true; try{ await S.D.call('POST','syncretry',{ kind:bt.dataset.sk, ref:bt.dataset.sr }); toast('Done'); viewAdmin(); }catch(e){ alertBox(e); bt.disabled=false; } });
   }catch(e){ box.innerHTML='<h2>Backup sync</h2><p class="muted" style="margin:0">Not available right now.</p>'; } })();
+  $('#viewas').onchange=e=>{ if (e.target.value) setViewAs(e.target.value); };
   const cr=$('#ctl-cr'); cr.value=creditsMode();
   cr.onchange=async()=>{ try{ await S.D.call('POST','setting',{key:'ClientCredits',value:cr.value}); S.settings.ClientCredits=cr.value; toast('Client credits updated'); }catch(e){ alertBox(e); cr.value=creditsMode(); } };
   const ts=$('#ctl-test'); if (ts) ts.onclick=async()=>{ if (!confirm('Start test mode?\n\nLeave approvals will not be written to the Leaves Tracker, and a banner shows on every page. Everything created while testing can be cleared when you go live.')) return; try{ await S.D.call('POST','setting',{key:'TestMode',value:'On'}); S.settings.TestMode='On'; toast('Test mode is on'); render(); }catch(e){ alertBox(e); } };
