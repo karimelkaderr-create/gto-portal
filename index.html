@@ -192,6 +192,7 @@ tbody tr:hover td{background:rgba(255,255,255,.03)}
 .datechips label:has(input:checked){border-color:rgba(227,185,90,.55);background:rgba(227,185,90,.12)}
 input[type=checkbox]{accent-color:var(--gold)}
 
+.snap{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));background:var(--glass);border:1px solid var(--edge);border-radius:var(--r);overflow:hidden}.snap .m{padding:18px 22px;border-left:1px solid var(--edge);margin-left:-1px;cursor:pointer}.snap .m:hover{background:var(--glass-2)}.snap .m h3{margin:0 0 6px;font-size:13.5px;color:var(--muted);font-weight:500}.snap .m p{margin:4px 0 0;font-size:13px;color:var(--muted)}
 .week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--edge);border-radius:var(--r);overflow:hidden;background:var(--glass)}
 .week>div{padding:13px 15px;border-left:1px solid var(--edge);margin-left:-1px;min-width:0}
 .week span{display:block;font-size:12.5px;color:var(--muted)}
@@ -217,7 +218,8 @@ input[type=checkbox]{accent-color:var(--gold)}
 .upnote{position:fixed;top:92px;right:18px;z-index:120;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 14px 14px 16px;border-radius:16px;background:rgba(22,24,29,.96);border:1px solid rgba(227,185,90,.55);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(227,185,90,.12);animation:upin .35s cubic-bezier(.2,.9,.3,1.2)}
 .upnote .ic{font-size:22px;animation:upring 1s ease 2}.upnote .tx{display:flex;flex-direction:column;min-width:0;flex:1}.upnote .tx b{font-size:14.5px}.upnote .tx span{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upnote .tx small{color:var(--faint);font-size:12px}
 .credit-card{background:#fff;color:#14171c;border-radius:18px;padding:26px 28px;max-width:860px;box-shadow:0 10px 40px rgba(0,0,0,.35)}.credit-card .cc-head{display:flex;gap:16px;align-items:center;padding-bottom:16px;border-bottom:3px solid #c9a24a}.credit-card .cc-head img{width:54px;height:54px;border-radius:50%;object-fit:cover;background:#0b0d11}.credit-card h3{margin:0;font-size:22px;color:#14171c}.credit-card .cc-head p{margin:4px 0 0;display:flex;gap:10px;flex-wrap:wrap}.credit-card .cc-head span{background:#f2ecdc;color:#5b4713;border-radius:999px;padding:3px 12px;font-size:13.5px;font-weight:600}.credit-card table{width:100%;border-collapse:collapse;margin-top:6px}.credit-card th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6a7078;padding:12px 10px;border-bottom:1px solid #e3e5e8}.credit-card td{padding:13px 10px;border-bottom:1px solid #eceef0;font-size:15px;color:#14171c;vertical-align:top}.credit-card .num{text-align:right;white-space:nowrap}.credit-card td.num b{font-size:18px}.credit-card .cr-t small{display:block;color:#6a7078;font-size:12.5px;margin-top:2px}.credit-card .cr-past{color:#b3261e;font-weight:600}.credit-card .cr-none{color:#9aa0a8}.credit-card .cc-foot{margin-top:14px;font-size:12px;color:#6a7078}.cr-list{display:flex;flex-direction:column;gap:6px}.cr-row{display:grid;grid-template-columns:2fr 1fr 1.3fr auto;gap:12px;align-items:center;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line,#2a2e36);background:transparent;color:inherit;cursor:pointer;font:inherit}.cr-row:hover{border-color:var(--gold,#c9a24a);background:rgba(201,162,74,.08)}@media (max-width:820px){.cr-row{grid-template-columns:1fr 1fr}.credit-card{padding:18px}}
-.sched td.canedit{cursor:pointer}.sched td.canedit:hover{outline:1px solid var(--accent,#c9a24b)}.sched td.edited{box-shadow:inset 3px 0 0 var(--warn,#e0a030);font-weight:600}.testbar{background:#3a2a05;color:#f5d27a;border-bottom:1px solid #6b4d10;padding:9px 36px;font-size:13.5px}.testbar b{background:#f5d27a;color:#3a2a05;border-radius:6px;padding:2px 8px;margin-right:8px;letter-spacing:.06em}.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
+.sched td.canedit{cursor:pointer}.sched td.canedit:hover{outline:1px solid var(--accent,#c9a24b)}.sched td.edited{box-shadow:inset 3px 0 0 var(--warn,#e0a030);font-weight:600}.viewbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:#12202e;color:#bcd8f5;border-bottom:1px solid #2b4a68;padding:8px 36px;font-size:13.5px}.viewbar b{background:#7fb4ea;color:#0b1b2b;border-radius:6px;padding:2px 8px;letter-spacing:.06em}.viewbar select{width:auto;max-width:260px}.viewbar .muted{color:#8fb0d0}
+.testbar{background:#3a2a05;color:#f5d27a;border-bottom:1px solid #6b4d10;padding:9px 36px;font-size:13.5px}.testbar b{background:#f5d27a;color:#3a2a05;border-radius:6px;padding:2px 8px;margin-right:8px;letter-spacing:.06em}.opnote{top:170px}.upnote .x{background:none;border:0;color:var(--faint);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}.upnote .x:hover{color:var(--ink)}
 @keyframes upin{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}@keyframes upring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){.upnote,.upnote .ic{animation:none}}
 @media (max-width:820px){.upnote{top:auto;bottom:92px;right:16px;left:16px;max-width:none}}
@@ -768,6 +770,7 @@ function toKey(v){ const d = parseDateCell(v); return d ? dkey(d) : String(v||''
 class ApiData extends Data {
   constructor(){ super(null); this.cache = {}; }
   async call(method, r, body, params, retried){
+    if (S.viewAs && method!=='GET' && r!=='ask') throw new Error('You are previewing the portal as '+S.me.name+', so nothing can be saved. Choose "Back to me" at the top to make changes.');
     const q = new URLSearchParams({ r, ...(params||{}) });
     const res = await fetch(`${CONFIG.apiBase}?${q}`, { method, headers:{ Authorization:'Bearer '+await getToken(retried), 'Content-Type':'application/json' }, body: body?JSON.stringify(body):undefined });
     if (res.status===401 && !retried) return this.call(method, r, body, params, true);
@@ -940,6 +943,7 @@ async function boot(){
       $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(email)} ${me&&!ROLES.includes(String(me['Portal Role']).trim())?'is on the list but has no portal role':'isn\'t on the portal\'s access list'}. Ask your Duty Manager to add you, then refresh this page.</p></div></main>`; return;
     }
     S.me = { email, name: me['Full Name'], role: String(me['Portal Role']).trim(), row: me, admin: yes(me['Portal Admin']) };
+    S.real = S.me; S.viewAs = null;
     render();
   } catch(e){ console.error(e); $('#app').innerHTML = `<div class="loading"><b>Something went wrong while loading.</b><br>${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div>`; }
 }
@@ -968,6 +972,17 @@ const hasAppr = u => canSwaps(u) || ['Team Leader','Duty Manager','General Manag
 const initials = n => String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 function navPinned(){ try { return !!localStorage.getItem('gto.navPinned'); } catch(e){ return false; } }
 function applyNavPin(){ const on=navPinned(); document.body.classList.toggle('nav-pinned', on); const b=$('#navpin'); if (b){ b.setAttribute('aria-pressed', on); b.title = on?'Let the menu hide':'Keep the menu open'; b.setAttribute('aria-label', b.title); } }
+function viewAsBar(acc){
+  const rows=acc.rows.filter(r=>r.Email && !/^no$/i.test(String(r.Active||'').trim()) && ROLES.includes(String(r['Portal Role']).trim())).sort((a,b)=>ROLES.indexOf(String(a['Portal Role']).trim())-ROLES.indexOf(String(b['Portal Role']).trim()) || String(a['Full Name']).localeCompare(String(b['Full Name'])));
+  const opts=ROLES.map(r=>{ const l=rows.filter(x=>String(x['Portal Role']).trim()===r); return l.length?`<optgroup label="${r}">${l.map(x=>`<option value="${esc(x.Email)}" ${S.viewAs===x.Email?'selected':''}>${esc(x['Full Name'])}</option>`).join('')}</optgroup>`:''; }).join('');
+  return `<div class="viewbar" role="region" aria-label="View as"><b>View as</b><select id="viewas" class="i"><option value="">Me (${esc(S.real.name)})</option>${opts}</select>${S.viewAs?`<span>Preview only. You see ${esc(S.me.name)}'s role and screens, and nothing can be saved.</span><button class="btn sm" id="viewback">Back to me</button>`:'<span class="muted">See how each role sees the portal.</span>'}</div>`;
+}
+function setViewAs(email){
+  if (!email){ S.me=S.real; S.viewAs=null; }
+  else { const row=S.D.cache.access.rows.find(r=>r.Email===email); if (!row) return;
+    S.viewAs=email; S.me={ email, name:row['Full Name'], role:String(row['Portal Role']).trim(), row, admin:false }; }
+  S._q=null; S.tab='home'; render(); window.scrollTo(0,0);
+}
 async function render(){
   const u = S.me; clearInterval(tickTimer); clearInterval(statusTimer); S._boardPaint = null;
   const myRender = S.renderId = (S.renderId||0) + 1;
@@ -990,6 +1005,7 @@ async function render(){
       <div class="mtop"><img src="${LOGO}" alt="GTO"><b>GTO</b><span class="muted" style="font-size:13px">Operations portal</span><div class="av" title="${esc(u.name)}">${esc(initials(u.name))}</div></div>
       ${DEMO?`<div class="demo"><b>Demo</b> Sample people only, nothing is saved. Viewing as
         <select id="demoAs" class="i">${(await S.D.access()).rows.map(r=>`<option value="${r.Email}" ${r.Email===S.demoAs?'selected':''}>${esc(r['Full Name'])} (${esc(r['Portal Role'])})</option>`).join('')}</select></div>`:''}
+      ${S.real && S.real.admin ? viewAsBar(await S.D.access()) : ''}
       ${testMode()?'<div class="testbar" role="status"><b>TEST MODE</b> Everything works as normal, but nothing is written to the Leaves Tracker or the rota, and everything created during the test is cleared when the portal goes live.</div>':''}
       ${agent?'<div class="statusbar" id="statusbar" role="region" aria-label="Your status"></div>':''}
       <header class="ph">${S.tab!=='home'?`<div class="ph-ic" aria-hidden="true">${ICON[S.tab]}</div>`:''}<div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div><div class="today">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></header>
@@ -998,6 +1014,8 @@ async function render(){
     </div>
   </div>`;
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
+  const va=$('#viewas'); if (va) va.onchange=()=>setViewAs(va.value);
+  const vb=$('#viewback'); if (vb) vb.onclick=()=>setViewAs('');
   $('#signout') && ($('#signout').onclick = ()=>msalApp.logoutRedirect());
   $('#navpin') && ($('#navpin').onclick = e=>{ e.stopPropagation(); const v=!navPinned(); try{ localStorage.setItem('gto.navPinned', v?'1':''); }catch(_){} applyNavPin(); });
   applyNavPin();
@@ -2245,11 +2263,44 @@ async function viewHome(){
     const byTl = q.disputes.filter(d=>d['Agent Email']===u.email && d['Raised By']!==u.email && d.Status==='Open').length;
     if (byTl) qNote += alertBtn(`Your team leader raised ${byTl===1?'a dispute':byTl+' disputes'} about your quality ${byTl===1?'evaluation':'evaluations'}.`, 'The quality team will review it.');
   } catch(e){}
+  let snap='', myq='';
+  try {
+    const qd = S._q || null; const evs = qd ? qd.evals : [];
+    const avgOf = l => l.length ? l.reduce((a,e)=>a+e.score,0)/l.length : null;
+    const months=[...new Set(evs.map(e=>e.month))]; const lm = months[months.length-1];
+    if (isMgr(u)){
+      const acc=(await S.D.access()).rows; let keys=null;
+      if (u.role==='Team Leader') keys=new Set(acc.filter(r=>r['Manager Email']===u.email).flatMap(nameKeys));
+      const tr=(await S.D.tracker()).items.filter(x=>x.approved && (!keys||keys.has(x.n)));
+      const ym=dkey(new Date()).slice(0,7);
+      const upl=tr.filter(x=>x.type==='UPL'&&String(x.date).slice(0,7)===ym);
+      const uplBy={}; upl.forEach(x=>uplBy[x.name]=(uplBy[x.name]||0)+1);
+      const em=tr.filter(x=>x.type==='Emergency'); const emBy={}; em.forEach(x=>emBy[x.name]=(emBy[x.name]||0)+1);
+      const emMonth=em.filter(x=>String(x.date).slice(0,7)===ym).length; const near=Object.entries(emBy).filter(([,c])=>c>=lim-1).length;
+      const inM=evs.filter(e=>e.month===lm); const per={}; inM.forEach(e=>{(per[e.agentEmail||e.agent]=per[e.agentEmail||e.agent]||[]).push(e);});
+      const below=Object.values(per).filter(l=>avgOf(l)<0.8).length; const a=avgOf(inM);
+      const chips=o=>Object.entries(o).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([n,c])=>`<span class="chip">${esc(n)} ${c}</span>`).join(' ');
+      snap=`<div class="sec"><div class="row" style="margin-bottom:10px"><h2 style="margin:0;font-size:17px;font-weight:600">Team snapshot</h2><span class="muted" style="font-size:13px">${u.role==='Team Leader'?'Your team':'All teams'} this month</span></div>
+        <div class="snap">
+          <div class="m go" data-go="quality"><h3>Quality</h3><div class="stat" style="color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(a)]||'inherit'}">${qPct(a)}</div><p>${below?below+' '+(below===1?'agent':'agents')+' below 80%':(a==null?'no evaluations yet':'everyone on target')}</p></div>
+          <div class="m go" data-go="act"><h3>UPL</h3><div class="stat">${upl.length}<small> days</small></div><p>${upl.length?chips(uplBy):'none this month'}</p></div>
+          <div class="m go" data-go="leave"><h3>Emergencies</h3><div class="stat">${emMonth}<small> this month</small></div><p>${near?near+' '+(near===1?'person is':'people are')+' close to the limit':'nobody close to the limit'}</p></div>
+        </div></div>`;
+    } else {
+      const mine=evs.filter(e=>e.agentEmail===u.email&&e.month===lm); const a=avgOf(mine);
+      if (a!=null){ const last=mine.slice().sort((x,y)=>x.date<y.date?1:-1)[0]; const tip=last&&(last.actions||last.findings);
+        const word=a>=0.9?'Great work, above target':a>=0.8?'Good, close to target':'Let us work on this together';
+        myq=`<div class="card sec" data-go="quality" style="cursor:pointer"><div class="row" style="margin-bottom:6px"><h2 style="margin:0;font-size:17px">How I am doing</h2><span class="spacer"></span><span class="muted" style="font-size:13px">Open Quality</span></div>
+          <div class="row" style="gap:18px;align-items:center"><div class="stat" style="font-size:40px;color:${{ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)'}[qCls(a)]||'inherit'}">${qPct(a)}</div><div><b>${word}</b><div class="muted" style="font-size:13.5px">Your chat score for ${esc(lm)}, ${mine.length} chat${mine.length===1?'':'s'} reviewed.</div></div></div>
+          ${tip&&String(tip).trim()&&String(tip).trim()!=='N/A'?`<p style="margin:12px 0 0;padding:10px 12px;border:1px solid var(--edge);border-radius:12px"><b style="color:var(--gold);font-size:12px;letter-spacing:.06em">ONE THING TO TRY</b><br>${esc(String(tip).slice(0,220))}</p>`:''}</div>`; }
+    }
+  } catch(e){}
   if (S.renderId !== myRender) return;
   v.innerHTML = `
     ${qNote}
     ${alerts.length?`<div class="alert bad" data-go="leave" style="cursor:pointer"><b>${alerts.length} ${alerts.length===1?'person is':'people are'} over ${lim} emergency days:</b> ${alerts.slice(0,4).map(a=>esc(a.name)+' ('+a.count+')').join(', ')}${alerts.length>4?' and more':''}. Open Leaves to review.</div>`:''}
     <div id="board"></div>
+    ${snap}
     <div class="metrics sec">
       <div class="m go" data-go="leave"><h3>Leave remaining</h3><div class="stat">${st.remaining??'—'}<small> days</small></div><p>${st.pendingDays?`${st.pendingDays} days waiting for approval`:`of ${st.allowance??'—'} this year`}</p></div>
       <div class="m go ${st.emerg>lim?'alert-m':''}" data-go="leave"><h3>Emergency used</h3><div class="stat">${st.emerg}<small> of ${lim}</small></div><p>${st.emerg>lim?'over the limit':`${Math.max(0,lim-st.emerg)} left`}</p></div>
@@ -2258,10 +2309,13 @@ async function viewHome(){
         : `<div class="m go" data-go="leave"><h3>My requests</h3><div class="stat">${myPending}</div><p>${myPending?'waiting for approval':'none pending'}</p></div>`}
     </div>
     <div class="row sec" style="margin-bottom:10px"><h2 style="margin:0;font-size:17px;font-weight:600">This week</h2><span class="spacer"></span><button class="btn sm" data-go="sched">Full schedule</button></div>
-    <div class="week">${days.map((d,i)=>{ const t=shifts[i].text; const ps=parseShift(t); const off=!ps; return `<div class="${dkey(d)===tk?'today':''} ${off?'off':''}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(t)}">${esc(ps?ps.label:(t||'—'))}</b></div>`; }).join('')}</div>`;
+    <div class="week">${days.map((d,i)=>{ const t=shifts[i].text; const ps=parseShift(t); const off=!ps; return `<div class="${dkey(d)===tk?'today':''} ${off?'off':''}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(t)}">${esc(ps?ps.label:(t||'—'))}</b></div>`; }).join('')}</div>
+    ${myq}<div id="homeNew"></div>`;
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.go; render(); });
   if (S.renderId === myRender) await mountBoard($('#board'));
   kbData().then(kb=>{ if (S.renderId !== myRender) return; const seen=kbSeen(); const fresh=(kb.updates||[]).filter(u=>upTime(u)>seen && upWho(u)!==S.me.email && Date.now()-parseTs(upTime(u))<7*864e5);
+    const hn=$('#homeNew'); const latest=(kb.updates||[]).slice().sort((a,b)=>upTime(a)<upTime(b)?1:-1).slice(0,3);
+    if (hn && latest.length) hn.innerHTML=`<div class="card sec"><div class="row" style="margin-bottom:8px"><h2 style="margin:0;font-size:17px">What is new</h2><span class="spacer"></span><button class="btn sm" data-go="kb">See all</button></div>${latest.map(x=>`<div data-go="kb" style="cursor:pointer;padding:9px 0;border-top:1px solid var(--edge)"><b style="font-weight:600">${esc(x.Title)}</b></div>`).join('')}</div>`, hn.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.go; render(); });
     if (!fresh.length) return; const d=document.createElement('div'); d.className='alert info'; d.style.cursor='pointer';
     d.innerHTML=`<b>${fresh.length===1?(fresh[0]['Edited At']&&String(fresh[0]['Edited At'])>=String(fresh[0]['Posted At'])?'Updated':'New update'):fresh.length+' new or edited updates'}:</b> ${esc(fresh[0].Title)}${fresh.length>1?' and more':''}. Open the Updates tab to read ${fresh.length===1?'it':'them'}.`;
     d.onclick=()=>{ S.tab='kb'; render(); }; $('#view').prepend(d); }).catch(()=>{});
