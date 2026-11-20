@@ -2172,17 +2172,10 @@ function aiMd(text){
   if (list) out.push(`<ul>${list.join('')}</ul>`);
   return out.join('');
 }
-/* The assistant button lives on every page, not just Updates, and glides down the edge as the page scrolls. */
+/* The assistant button lives on every page, fixed in the bottom right corner. */
 function ensureAiFab(){
   let fab=$('#aifab');
   if (!fab){ fab=document.createElement('button'); fab.className='ai-fab'; fab.id='aifab'; fab.setAttribute('aria-label','Ask GTO Assist'); fab.innerHTML=`${KBI.spark}<span>Ask GTO Assist</span>`; fab.onclick=()=>aiOpen(); document.body.appendChild(fab); }
-  if (S._aiFabWired) { S._aiFabPlace && S._aiFabPlace(); return; }
-  S._aiFabWired=true; let tk=false;
-  const place=()=>{ tk=false; const f=$('#aifab'); if(!f) return; const h=f.offsetHeight||48, vh=window.innerHeight, base=window.innerWidth<=820?96:28;
-    const max=document.documentElement.scrollHeight-vh; const p=max>0?Math.min(1,Math.max(0,(window.scrollY||0)/max)):0;
-    f.style.bottom='auto'; f.style.top=Math.round(100+p*Math.max(0,vh-h-base-100))+'px'; };
-  S._aiFabPlace=place; const req=()=>{ if(!tk){ tk=true; requestAnimationFrame(place); } };
-  window.addEventListener('scroll',req,true); window.addEventListener('resize',req); place();
 }
 function aiOpen(prefill, send){
   let p=$('#aipanel');
