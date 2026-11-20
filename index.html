@@ -1060,17 +1060,16 @@ async function mountBoard(el, after){
   const paint = () => {
     if (!el.isConnected){ return; }
     const s2 = shiftState(S.D.cache.att.rows, u.email); const used = s2.breakMins; const pct = Math.min(100, used/bm*100);
-    let cls='s-out', state=actions?'Not clocked in':'Logged out', note= ps?`Shift starts ${pad(Math.floor(ps.start/60)%24)}:${pad(ps.start%60)}`:(actions?'Clock in when you start':'Press Work in the top bar to start'), btns=`<button class="bbtn go" data-act="Clock In">Clock in</button>`;
+    let cls='s-out', state='Not clocked in', note= ps?`Shift starts ${pad(Math.floor(ps.start/60)%24)}:${pad(ps.start%60)}`:'Clock in when you start', btns=`<button class="bbtn go" data-act="Clock In">Clock in</button>`;
     if (s2.open && s2.onBreak){ const left=bm-used; cls= left>=0?'s-break':'s-over'; state = left>=0?'On break':'Break over'; note = left>=0?`${fmtMins(left)} left`:`Over by ${fmtMins(-left)}`; btns=`<button class="bbtn go" data-act="Break End">End break</button>`; }
     else if (s2.open && s2.onCoach){ cls='s-in'; state='In coaching'; note=`Since ${hm(s2.onCoach)}`; btns=`<button class="bbtn go" data-act="Coaching End">End coaching</button>`; }
-    else if (s2.open){ cls='s-in'; state=actions?'Clocked in':'Working'; note=`Since ${hm(s2.open.in)}`; btns=`<button class="bbtn go" data-act="Break Start">Start break</button><button class="bbtn ghost" data-act="Clock Out">Clock out</button>`; }
+    else if (s2.open){ cls='s-in'; state='Clocked in'; note=`Since ${hm(s2.open.in)}`; btns=`<button class="bbtn go" data-act="Break Start">Start break</button><button class="bbtn ghost" data-act="Coaching Start" title="Use this while you are in a coaching session">Coaching</button><button class="bbtn ghost" data-act="Clock Out">Clock out</button>`; }
     el.innerHTML = `<section class="board ${cls}" aria-live="polite">
       <div class="b-cell b-time"><span class="b-l">Now</span><span class="b-v">${hm(new Date())}</span><span class="b-s">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</span></div>
       <div class="b-cell"><span class="b-l">Today's shift</span><span class="b-v">${esc(shiftLabel)}</span><span class="b-s">${esc(shiftNote)}</span></div>
       <div class="b-cell"><span class="b-l">Status</span><span class="b-v"><i class="dot"></i>${state}</span><span class="b-s">${note}</span></div>
       <div class="b-cell"><span class="b-l">Break used</span><span class="b-v">${Math.round(used)}<small> / ${bm} min</small></span><div class="bar"><i class="${used>bm?'over':''}" style="width:${pct}%"></i></div></div>
-      ${actions?`<div class="b-act">${btns}</div>`:''}</section>`;
-    if (!actions) el.firstElementChild.classList.add('noact');
+      <div class="b-act">${btns}</div></section>`;
     el.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
       el.querySelectorAll('[data-act]').forEach(x=>x.disabled=true); const act=b.dataset.act;
       try{
@@ -1079,7 +1078,7 @@ async function mountBoard(el, after){
         if (act==='Clock Out' && cur.onBreak) await recordAction('Break End', u.row, date, 'auto: clocked out on break');
         if (act==='Clock Out' && cur.onCoach) await recordAction('Coaching End', u.row, date, 'auto: clocked out in coaching');
         await recordAction(act, u.row, date);
-        toast({ 'Clock In':'Clocked in', 'Clock Out':'Clocked out', 'Break Start':'Break started', 'Break End':'Break ended', 'Coaching End':'Coaching ended' }[act]+' at '+hm(new Date()));
+        toast({ 'Clock In':'Clocked in', 'Clock Out':'Clocked out', 'Break Start':'Break started', 'Break End':'Break ended', 'Coaching Start':'Coaching started', 'Coaching End':'Coaching ended' }[act]+' at '+hm(new Date()));
       }catch(e){ alertBox(e); }
       paint(); after && after();
     });
