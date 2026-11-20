@@ -798,6 +798,8 @@ function kbStatus(item, neighbourYear) {
   const nameYear = (String(item.name).match(/20(2\d)/) || String(item.name).match(/\/(2\d)\b/) || [])[1];
   const fbYear = nameYear ? 2000 + +nameYear : neighbourYear || null;
   if (/paused/i.test(offer)) return { status: 'Paused', note: offer };
+  // A flash sale runs on the date written for it (the activation date). After that day it is over, even if the cell also says "while quota lasts".
+  if (/flash/i.test(String(item.name) + ' ' + offer)) { const fd = datesIn(offer, fbYear); if (fd.length) { const end = new Date(Math.max(...fd)); const t0 = new Date(); t0.setHours(0, 0, 0, 0); return { status: end >= t0 ? 'On sale' : 'Ended', end: dkey(end) }; } }
   if (/quota|while stock|sold out|until it.?s gone/i.test(offer) && !/\b(until|ends?|by|before)\b[^.\n]{0,70}\d/i.test(offer)) return { status: 'While quota lasts' };
   const ds = datesIn(offer, fbYear); const today = new Date(); today.setHours(0, 0, 0, 0);
   if (ds.length) { const end = new Date(Math.max(...ds)); return { status: end >= today ? 'On sale' : 'Ended', end: dkey(end) }; }
