@@ -798,8 +798,15 @@ function kbStatus(item, neighbourYear) {
   const nameYear = (String(item.name).match(/20(2\d)/) || String(item.name).match(/\/(2\d)\b/) || [])[1];
   const fbYear = nameYear ? 2000 + +nameYear : neighbourYear || null;
   if (/paused/i.test(offer)) return { status: 'Paused', note: offer };
-  // A flash sale runs on the date written for it (the activation date). After that day it is over, even if the cell also says "while quota lasts".
-  if (/flash/i.test(String(item.name) + ' ' + offer)) { const fd = datesIn(offer, fbYear); if (fd.length) { const end = new Date(Math.max(...fd)); const t0 = new Date(); t0.setHours(0, 0, 0, 0); return { status: end >= t0 ? 'On sale' : 'Ended', end: dkey(end) }; } }
+  // Closed offers: the sheet says so in plain words (for example "no longer accepting deposits").
+  const everything = String(item.name) + ' ' + Object.values(item.fields).join(' ');
+  if (/no longer (accept|available|valid|on sale)|not (currently )?accepting|(sale|offer|promotion) (has |is )?(now )?(ended|closed|over)|closed for (new )?(deposits?|bookings?)|deposits? (are |is )?closed/i.test(everything)) return { status: 'Ended', note: 'Closed in the sheet' };
+  // A flash sale, or an offer that runs for a number of hours, starts on the date written for it (the activation date) and lasts that long.
+  const hrs = (everything.match(/\b(\d{1,3})\s*-?\s*hours?\b/i) || [])[1];
+  if (/flash/i.test(everything) || hrs) {
+    const fd = datesIn(String(item.name) + ' ' + offer, fbYear);
+    if (fd.length) { const start = new Date(Math.min(...fd)); const end = new Date(start.getTime() + (hrs ? +hrs : 24) * 3600e3); end.setHours(0, 0, 0, 0); const t0 = new Date(); t0.setHours(0, 0, 0, 0); return { status: end >= t0 ? 'On sale' : 'Ended', end: dkey(end) }; }
+  }
   if (/quota|while stock|sold out|until it.?s gone/i.test(offer) && !/\b(until|ends?|by|before)\b[^.\n]{0,70}\d/i.test(offer)) return { status: 'While quota lasts' };
   const ds = datesIn(offer, fbYear); const today = new Date(); today.setHours(0, 0, 0, 0);
   if (ds.length) { const end = new Date(Math.max(...ds)); return { status: end >= today ? 'On sale' : 'Ended', end: dkey(end) }; }
