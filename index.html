@@ -233,6 +233,7 @@ input[type=checkbox]{accent-color:var(--gold)}
 .pill{border:1px solid var(--edge-2);background:var(--glass);color:var(--muted);border-radius:999px;padding:6px 13px;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .pill:hover{color:var(--ink);background:var(--glass-hi)}.pill.on{background:var(--gold-grad);color:var(--gold-ink);border-color:transparent;font-weight:600}
 .pill .n{font-size:11.5px;opacity:.75}.pill svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8}
+.discl{margin:22px 2px 0;font-size:12.5px;line-height:1.5;color:var(--faint,#8b8f98)}
 .kb-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 2px 12px;color:var(--muted);font-size:13.5px}
 .kb-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;align-items:start;margin-top:22px}
 .kb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
@@ -2065,6 +2066,7 @@ async function viewKb(){
       <div class="kb-row" role="group" aria-label="Category"><span class="lbl">Type</span>${['',...kb.cats].map(c=>`<button class="pill ${F.cat===c?'on':''}" data-cat="${esc(c)}">${c?esc(c==='Posh Saver'?c:c+'s'):'All'} <span class="n">${counts(c)}</span></button>`).join('')}</div>
       <div class="kb-row" role="group" aria-label="Covers"><span class="lbl">Covers</span>${COV_SHORT.map((l,i)=>`<button class="pill ${F.cov===i?'on':''}" data-cov="${i}">${KBI.cov[i]}${l}</button>`).join('')}<button class="pill ${F.live?'on':''}" data-live aria-pressed="${!!F.live}" title="Only offers that are on sale now"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>On sale now</button></div>
     </section>
+    <p class="discl" style="margin:10px 2px 0">The data here is not 100% accurate. If you are unsure about an offer, check with your Duty Manager before telling a client. For a system bug, message Karim Abdelkader directly.</p>
     <div class="kb-layout">
       <div>
         <div class="kb-meta"><span id="kbcount"></span><span class="spacer" style="flex:1"></span><label for="kbsort">Sort</label><select id="kbsort" class="i" style="width:auto;padding:6px 10px"><option value="new" ${F.sort==='new'?'selected':''}>Newest first</option><option value="old" ${F.sort==='old'?'selected':''}>Oldest first</option><option value="az" ${F.sort==='az'?'selected':''}>A–Z</option></select></div>
@@ -2314,7 +2316,8 @@ async function viewHome(){
     </div>
     <div class="row sec" style="margin-bottom:10px"><h2 style="margin:0;font-size:17px;font-weight:600">This week</h2><span class="spacer"></span><button class="btn sm" data-go="sched">Full schedule</button></div>
     <div class="week">${days.map((d,i)=>{ const t=shifts[i].text; const ps=parseShift(t); const off=!ps; return `<div class="${dkey(d)===tk?'today':''} ${off?'off':''}"><span>${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}</span><b title="${esc(t)}">${esc(ps?ps.label:(t||'—'))}</b></div>`; }).join('')}</div>
-    ${myq}<div id="homeNew"></div>`;
+    ${myq}<div id="homeNew"></div>
+    <p class="discl">The data in the portal is not 100% accurate. If anything looks wrong or you are unsure, please check with your Duty Manager. For a system bug, message Karim Abdelkader directly.</p>`;
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ S.tab=el.dataset.go; render(); });
   if (S.renderId === myRender) await mountBoard($('#board'));
   kbData().then(kb=>{ if (S.renderId !== myRender) return; const seen=kbSeen(); const fresh=(kb.updates||[]).filter(u=>upTime(u)>seen && upWho(u)!==S.me.email && Date.now()-parseTs(upTime(u))<7*864e5);
