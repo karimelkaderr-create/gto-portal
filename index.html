@@ -206,24 +206,6 @@ input[type=checkbox]{accent-color:var(--gold)}
 .modal .card{max-width:680px;width:100%;max-height:90vh;overflow:auto;background:rgba(28,31,37,.85);border-color:var(--edge-2)}
 .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:rgba(28,31,37,.85);color:#fff;padding:11px 20px;border-radius:12px;z-index:60;font-weight:500;border:1px solid rgba(227,185,90,.4)}
 .center{text-align:center}
-.wl{max-width:1180px;margin:0 auto;padding:22px 28px 48px}
-.wl-top{display:flex;align-items:center;gap:14px;padding:6px 0 18px}.wl-top img{width:44px;height:44px;border-radius:12px;object-fit:cover}.wl-top b{display:block;font-size:18px;font-weight:600}.wl-top span{font-size:13px;color:var(--muted)}
-.wl-hero{display:flex;flex-wrap:wrap;align-items:center;gap:44px;padding:44px 0 56px}.wl-copy{flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:20px}
-.wl-eyebrow{align-self:flex-start;font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(227,185,90,.35);padding:6px 12px;border-radius:999px}
-.wl h1{margin:0;font-size:clamp(34px,5.2vw,56px);line-height:1.06;font-weight:700;letter-spacing:-.02em}.wl-lead{margin:0;font-size:18px;line-height:1.55;color:#C9C6BD;max-width:520px}
-.wl-status{align-self:flex-start;display:flex;align-items:center;gap:14px;background:var(--glass);border:1px solid var(--edge);border-radius:14px;padding:14px 20px;max-width:100%}.wl-status b{display:block;font-size:16px}.wl-status span.s{font-size:13.5px;color:var(--muted)}
-.wl-dots{display:flex;gap:6px}.wl-dots i{width:9px;height:9px;border-radius:50%;background:var(--gold);animation:wlp 1.2s infinite ease-in-out}.wl-dots i:nth-child(2){animation-delay:.2s}.wl-dots i:nth-child(3){animation-delay:.4s}@keyframes wlp{0%,100%{opacity:.25}50%{opacity:1}}
-.wl-peek{flex:1 1 420px;min-width:0;display:flex;justify-content:center}.wl-peekc{width:100%;max-width:480px;background:var(--glass);border:1px solid var(--edge);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 30px 70px rgba(0,0,0,.4)}
-.wl-row{display:flex;gap:10px}.wl-box{flex:1;background:rgba(0,0,0,.25);border:1px solid var(--edge);border-radius:14px;padding:13px 14px}.wl-box small{display:block;font-size:12px;color:var(--muted)}.wl-box b{display:block;font-size:21px;margin-top:3px}
-.wl-seg{display:flex;gap:8px}.wl-seg span{flex:1;text-align:center;background:var(--glass-2);color:#C9C6BD;font-weight:600;font-size:13px;padding:9px 6px;border-radius:10px}.wl-seg span.on{background:var(--gold-grad);color:var(--gold-ink)}
-.wl h2{margin:0 0 6px;font-size:clamp(26px,3.4vw,34px);letter-spacing:-.01em}.wl-sub{margin:0 0 26px;color:var(--muted);font-size:16px}
-.wl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.wl-card{background:var(--glass);border:1px solid var(--edge);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:10px}
-.wl-ic{width:42px;height:42px;border-radius:12px;background:rgba(227,185,90,.12);display:flex;align-items:center;justify-content:center}.wl-ic svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.wl-card h3{margin:0;font-size:18px}.wl-card p{margin:0;font-size:14.5px;line-height:1.55;color:var(--muted)}
-.wl-start{margin-top:40px;background:var(--glass);border:1px solid var(--edge);border-radius:24px;padding:34px;display:flex;flex-direction:column;gap:24px}.wl-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px}
-.wl-step{display:flex;gap:14px}.wl-step>b{flex:none;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--gold-ink);display:flex;align-items:center;justify-content:center;font-size:17px}.wl-step strong{display:block;font-size:16px;margin-bottom:3px}.wl-step span{font-size:14.5px;line-height:1.5;color:var(--muted)}
-.wl-foot{margin-top:36px;padding-top:24px;border-top:1px solid var(--edge);display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;color:var(--muted);font-size:14px}.wl-foot b{color:var(--ink);display:block;margin-bottom:2px}.wl-foot small{color:var(--faint);font-size:13px}
-@media (max-width:700px){.wl{padding:16px 18px 36px}.wl-hero{gap:28px;padding:24px 0 36px}.wl-start{padding:24px}}
 .loading{padding:70px;text-align:center;color:var(--muted)}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 
@@ -939,44 +921,6 @@ async function getToken(force){
 const S = { tab:'home', me:null, D:null, settings:null, demoAs:'dm1@gto.demo', calMonth:null, attRange:null, schedOffset:0, leaveFilter:'' };
 let tickTimer = null, statusTimer = null;
 
-/* ============================ Welcome screen (shown while signing in, and when there is no access) ============================ */
-function welcomeScreen(statusHtml){
-  const ic = d => `<div class="wl-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></div>`;
-  const card = (d,t,p) => `<div class="wl-card">${ic(d)}<h3>${t}</h3><p>${p}</p></div>`;
-  return `<div class="wl">
-    <header class="wl-top"><img src="${LOGO}" alt="GTO"><div><b>GTO Ops Portal</b><span>Global Travel Organisation</span></div></header>
-    <section class="wl-hero">
-      <div class="wl-copy"><span class="wl-eyebrow">Welcome to the team</span>
-        <h1>Welcome to the<br>GTO Ops Portal</h1>
-        <p class="wl-lead">Your shift, your leave, your schedule and the latest offers, all in one friendly place. Everything you need for your day, one sign-in away.</p>
-        ${statusHtml}</div>
-      <div class="wl-peek" aria-hidden="true"><div class="wl-peekc">
-        <div class="wl-status" style="width:100%"><span class="wl-dots" style="gap:0"><i style="background:var(--ok);animation:none;opacity:1;box-shadow:0 0 0 5px rgba(98,211,148,.18)"></i></span><div><b style="font-size:15px">Working</b><span class="s">since 09:02 · break 12 / 45 min</span></div></div>
-        <div class="wl-row"><div class="wl-box"><small>Today's shift</small><b>09:00 – 18:00</b></div><div class="wl-box"><small>Break used</small><b>12 <small style="display:inline">/ 45 min</small></b></div></div>
-        <div class="wl-seg"><span class="on">Work</span><span>Break</span><span>Coaching</span><span>Log out</span></div>
-        <div class="wl-status" style="width:100%"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold)"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/></svg><span class="s" style="color:#C9C6BD;font-size:14px">Ask GTO Assist about any offer…</span></div>
-      </div></div>
-    </section>
-    <h2>Everything for your day, in one place</h2><p class="wl-sub">No more hunting through spreadsheets. Here is what you will find inside.</p>
-    <div class="wl-grid">
-      ${card('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','Your shift and status','Press Work to start, take your break, go into coaching and log out. Your time is recorded for you.')}
-      ${card('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>','Leave and swaps','Request annual leave, see your balance and swap shifts or days off with a teammate. Approvals are tracked for you.')}
-      ${card('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 4v17"/>','Your schedule','See your week at a glance and look ahead to the upcoming weeks, always up to date with the rota.')}
-      ${card('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>','Offers, updates and GTO Assist','Every promotion and product in one place, with an assistant that answers your questions in seconds.')}
-      ${card('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>','Client credits','Search a client by name or number and get a clean balance card to share during the call.')}
-      ${card('<path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>','Quality and guides','See your chat scores in plain language and open the playbook and guides whenever you need a refresher.')}
-    </div>
-    <section class="wl-start"><h2 style="margin:0">Getting started takes a minute</h2><div class="wl-steps">
-      <div class="wl-step"><b>1</b><div><strong>Open the portal</strong><span>You are signed in automatically with your GTO Microsoft account.</span></div></div>
-      <div class="wl-step"><b>2</b><div><strong>Press Work</strong><span>Start your shift from the bar at the top of the page.</span></div></div>
-      <div class="wl-step"><b>3</b><div><strong>Ask when you need help</strong><span>GTO Assist sits in the bottom right corner on every page.</span></div></div></div></section>
-    <footer class="wl-foot"><div><b>Can't sign in?</b>Ask your team leader to check that your work email is on the portal access list.</div><small>GTO Ops Portal · For GTO staff only</small></footer>
-  </div>`;
-}
-const welcomeSigningIn = '<div class="wl-status" role="status"><span class="wl-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><b>Signing you in…</b><span class="s">Using your GTO Microsoft account. This only takes a moment.</span></div></div>';
-const welcomeNoAccess = (msg) => `<div class="wl-status" role="alert" style="flex-direction:column;align-items:flex-start;gap:10px;border-color:rgba(255,138,128,.4)"><div><b>You don't have access yet</b><span class="s">${msg}</span></div><button class="btn" onclick="msalApp.loginRedirect({ scopes:SCOPES, prompt:'select_account' })">Use a different account</button></div>`;
-try { $('#app').innerHTML = welcomeScreen(welcomeSigningIn); } catch(e){}
-
 async function boot(){
   try{
     let email;
@@ -985,7 +929,7 @@ async function boot(){
       const acc = await initAuth(); if (!acc) return;
       S.D = new ApiData();
       try { await S.D.load(); }
-      catch(e){ if (e.status===403){ $('#app').innerHTML = welcomeScreen(welcomeNoAccess(esc(e.message))); return; } throw e; }
+      catch(e){ if (e.status===403){ $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(e.message)}</p><button class="btn" onclick="msalApp.loginRedirect({ scopes:SCOPES, prompt:'select_account' })">Use a different account</button></div></main>`; return; } throw e; }
       email = S.D.me.email;
     }
     S.settings = await S.D.settings();
@@ -993,7 +937,7 @@ async function boot(){
     const me = acc.rows.find(r=>r.Email===email) || acc.rows.find(r=>normEmail(r['Personal Email'])===email);
     if (me && me.Email!==email) email = me.Email || email;
     if (!me || /^no$/i.test(String(me.Active||'').trim()) || !ROLES.includes(String(me['Portal Role']).trim())){
-      $('#app').innerHTML = welcomeScreen(welcomeNoAccess(`${esc(email)} ${me&&!ROLES.includes(String(me['Portal Role']).trim())?'is on the list but has no portal role':'isn\'t on the portal\'s access list'}. Ask your Duty Manager to add you, then refresh this page.`)); return;
+      $('#app').innerHTML = `<main style="margin:0 auto"><div class="card center" style="max-width:520px;margin:70px auto"><img src="${LOGO}" alt="GTO" style="width:96px;height:96px;border-radius:50%;margin-bottom:10px"><h2>You don't have access yet</h2><p class="muted">${esc(email)} ${me&&!ROLES.includes(String(me['Portal Role']).trim())?'is on the list but has no portal role':'isn\'t on the portal\'s access list'}. Ask your Duty Manager to add you, then refresh this page.</p></div></main>`; return;
     }
     S.me = { email, name: me['Full Name'], role: String(me['Portal Role']).trim(), row: me, admin: yes(me['Portal Admin']) };
     render();
