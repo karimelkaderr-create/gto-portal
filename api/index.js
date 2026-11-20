@@ -882,7 +882,10 @@ async function loadKbView() {
     if (!e) { items.push({ ...base, key }); continue; }
     if (yes(e.Hidden)) { hidden.push({ key, name: base.name, cat: base.cat }); continue; }
     let over = {}; try { over = JSON.parse(e.Fields || '{}'); } catch (_) { /* ignore */ }
-    const it = { ...base, key, fields: { ...base.fields, ...over }, edited: Object.keys(over).length > 0 }; if (it.edited) deriveItem(it, base); items.push(it);
+    const closed = over.__closed === 'Yes'; delete over.__closed;
+    const it = { ...base, key, fields: { ...base.fields, ...over }, edited: Object.keys(over).length > 0 }; if (it.edited) deriveItem(it, base);
+    if (closed) { it.status = 'Ended'; it.closed = true; it.note = 'Marked as no longer on sale in the portal'; }
+    items.push(it);
   }
   return { ...kb, items, hidden, editsSig: ed.rows.map(r => r.Key + r['Edited At']).join(',') };
 }
@@ -894,6 +897,7 @@ async function doKbEdit(u, b) {
   let r = t.rows.find(x => x.Key === key); const isNew = !r; if (isNew) r = { Key: key, Hidden: '', Fields: '', 'Edited By': '', 'Edited At': '' };
   if (b.reset) { r.Hidden = ''; r.Fields = ''; }
   if (b.hide != null) r.Hidden = b.hide ? 'Yes' : '';
+  if (b.closed != null) { let cur = {}; try { cur = JSON.parse(r.Fields || '{}'); } catch (_) { /* ignore */ } if (b.closed) cur.__closed = 'Yes'; else delete cur.__closed; const js = JSON.stringify(cur); r.Fields = js === '{}' ? '' : js; }
   if (b.fields && typeof b.fields === 'object') {
     let cur = {}; try { cur = JSON.parse(r.Fields || '{}'); } catch (_) { /* ignore */ }
     for (const [k, v] of Object.entries(b.fields)) { if (!(k in base.fields)) bad('Unknown field: ' + k); const val = String(v ?? '').slice(0, 8000); if (val === base.fields[k]) delete cur[k]; else cur[k] = val; }

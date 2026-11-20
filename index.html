@@ -2128,7 +2128,7 @@ function kbDetail(id){
   const others = Object.entries(f).filter(([k])=>!/promotion details/i.test(k) && !shown.has(k) && !factKeys.has(k) && !covKeys.test(k));
   const linkify = s => esc(s).replace(/https?:\/\/[^\s<]+/g, u=>`<a href="${u.replace(/[).,]+$/,'')}" target="_blank" rel="noopener">${u}</a>`);
   const m=document.createElement('div'); m.className='modal'; m.innerHTML = `<div class="card wide" role="dialog" aria-modal="true" aria-label="${esc(it.name)}">
-    <div class="kb-d-head"><div style="flex:1;min-width:0"><span class="chip cat">${esc(it.cat)}</span>${kbChip(it)}<h2>${esc(it.name)}</h2></div>${kb.canEditKb?`<button class="btn" data-kbedit2>Edit</button><button class="btn danger" data-kbhide2>Delete</button>`:''}<button class="btn" data-close aria-label="Close">✕</button></div>
+    <div class="kb-d-head"><div style="flex:1;min-width:0"><span class="chip cat">${esc(it.cat)}</span>${kbChip(it)}<h2>${esc(it.name)}</h2></div>${kb.canEditKb?`<button class="btn" data-kbclose2>${it.closed?'Back on sale':'No longer on sale'}</button><button class="btn" data-kbedit2>Edit</button><button class="btn danger" data-kbhide2>Delete</button>`:''}<button class="btn" data-close aria-label="Close">✕</button></div>
     ${lead?`<div class="kb-sec" style="border-top:0;padding-top:16px"><small>${esc(lead[0])}</small><div>${linkify(lead[1])}</div></div>`:''}
     ${facts.length?`<div class="kb-facts">${facts.map(([l,x])=>`<div><small>${esc(l)}</small><span>${linkify(x)}</span></div>`).join('')}</div>`:''}
     <small style="display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px">What it can be used for</small>
@@ -2140,6 +2140,8 @@ function kbDetail(id){
   </div>`;
   document.body.appendChild(m);
   m.onclick=e=>{ if (e.target===m || e.target.closest('[data-close]')) m.remove(); };
+  m.querySelector('[data-kbclose2]') && (m.querySelector('[data-kbclose2]').onclick=async e=>{ const b=e.currentTarget; if (!it.closed && !confirm('Mark this offer as no longer on sale?\n\nEveryone sees it as ended and GTO Assist stops offering it. The sheet is not changed, so please fix the sheet too.')) return; b.disabled=true;
+    try{ await S.D.call('POST','kbedit',{ key:it.key, closed:!it.closed }); m.remove(); toast(it.closed?'Back on sale':'Marked as no longer on sale'); await kbData(true); viewKb(); }catch(er){ alertBox(er); b.disabled=false; } });
   m.querySelector('[data-kbedit2]') && (m.querySelector('[data-kbedit2]').onclick=()=>{ m.remove(); kbEditForm(id); });
   m.querySelector('[data-kbhide2]') && (m.querySelector('[data-kbhide2]').onclick=e=>{ const b=e.currentTarget; b.dataset.kbhide=id; kbHide(b); });
   m.querySelector('#kbaskthis').onclick=()=>{ m.remove(); aiOpen(`Tell me the key points of "${it.name}" that I should explain to a member.`, true); };
