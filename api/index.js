@@ -798,6 +798,9 @@ function kbStatus(item, neighbourYear) {
   const nameYear = (String(item.name).match(/20(2\d)/) || String(item.name).match(/\/(2\d)\b/) || [])[1];
   const fbYear = nameYear ? 2000 + +nameYear : neighbourYear || null;
   if (/paused/i.test(offer)) return { status: 'Paused', note: offer };
+  // The "Sold out" column of the sheet says whether the offer still takes deposits and subscriptions.
+  const so = Object.entries(item.fields).find(([k]) => /sold[\s-]*out/i.test(k));
+  if (so) { const v = String(so[1] ?? '').trim(); if (v && !/^(n|no|false|0|-|n\/a|na|open|available)$/i.test(v) && (/^(y|yes|true|1|x|✓|✔)$/i.test(v) || /sold|closed|full|finished|no longer|not (open|accepting|available)/i.test(v)) && !/^(not sold|no\b)/i.test(v)) return { status: 'Ended', soldOut: true, note: 'Sold out' }; }
   // Closed offers: the sheet says so in plain words (for example "no longer accepting deposits").
   const everything = String(item.name) + ' ' + Object.values(item.fields).join(' ');
   if (/no longer (accept|available|valid|on sale)|not (currently )?accepting|(sale|offer|promotion) (has |is )?(now )?(ended|closed|over)|closed for (new )?(deposits?|bookings?)|deposits? (are |is )?closed/i.test(everything)) return { status: 'Ended', note: 'Closed in the sheet' };
@@ -872,6 +875,7 @@ async function loadKbEdits() {
 function deriveItem(it, base) {
   it.cover = KB_COVER.map(([label, rx]) => { const f = Object.keys(it.fields).find(x => rx.test(x)); return [label, f ? kbCover(it.fields[f]) : null]; });
   const tc = Object.entries(it.fields).find(([k]) => /terms/i.test(k)); const link = tc && (tc[1].match(/https?:\/\/\S+/) || [])[0]; it.link = link ? link.replace(/[)\].,]+$/, '') : undefined;
+  delete it.soldOut; delete it.note;
   const st = kbStatus(it); if (st && st.status) Object.assign(it, st); else { it.status = base.status; it.end = base.end; }
 }
 async function loadKbView() {
@@ -982,7 +986,7 @@ async function doUpdate(u, b) {
   await addRow(URLS.portal, 'tblUpdates', rowFor(t.headers, row)); return { ok: true, id: row.ID };
 }
 function kbText(items) {
-  return items.map(i => `### ${i.name}\n[${i.cat} · ref ${i.id}${i.status ? ' · ' + i.status + (i.end ? ' (offer ends ' + i.end + ')' : '') : ''}]\n` + Object.entries(i.fields).filter(([k]) => !/promotion details/i.test(k)).map(([k, v]) => `${k}: ${v}`).join('\n')).join('\n\n');
+  return items.map(i => `### ${i.name}\n[${i.cat} · ref ${i.id}${i.soldOut ? ' · SOLD OUT, no longer taking deposits or subscriptions' : i.status ? ' · ' + i.status + (i.end ? ' (offer ends ' + i.end + ')' : '') : ''}]\n` + Object.entries(i.fields).filter(([k]) => !/promotion details/i.test(k)).map(([k, v]) => `${k}: ${v}`).join('\n')).join('\n\n');
 }
 const askLog = {}; let ixCache = null;
 const ASKLOG_HEADERS = ['ID', 'Asked At', 'Email', 'Name', 'Question', 'Answer Type'];
