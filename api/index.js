@@ -852,6 +852,25 @@ async function saveKbBackup(sheets) {
     await put(KB_BACKUP, enc({ at, sheets }), { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain' }); kbBackupAt = at;
   } catch (e) { console.error('KB backup not saved', e.message); }
 }
+/* A second kind of tab: one row per offer with tick boxes, for example Offer | T&Cs | notice | activation | 1st day to book | special terms | sold out. The ticks decide which offers are sold out. */
+const kbNorm = x => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+function flatSoldOut(sheets) {
+  const sold = new Map(), seen = new Map();
+  for (const v of Object.values(sheets)) {
+    let hr = -1, nc = -1, sc = -1;
+    for (let r = 0; r < Math.min((v || []).length, 6) && hr < 0; r++) { const row = v[r] || []; const n = row.findIndex(c => /^\s*offer\s*$/i.test(String(c ?? ''))); const so = row.findIndex(c => /sold[\s-]*o/i.test(String(c ?? ''))); if (n >= 0 && so >= 0) { hr = r; nc = n; sc = so; } }
+    if (hr < 0) continue;
+    for (let r = hr + 1; r < v.length; r++) { const nm = String((v[r] || [])[nc] ?? '').trim(); if (!nm) continue; const val = (v[r] || [])[sc]; seen.set(kbNorm(nm), nm); if (val === true || /^(true|yes|y|1|x|✓|✔)$/i.test(String(val ?? '').trim())) sold.set(kbNorm(nm), nm); }
+  }
+  return { sold, seen };
+}
+function applySoldOut(items, sheets) {
+  const { sold, seen } = flatSoldOut(sheets); const used = new Set();
+  if (!seen.size) return [];
+  const keyOf = i => { const n = kbNorm(i.name); if (seen.has(n)) return n; for (const k of seen.keys()) if (k.length >= 12 && n.length >= 12 && (k.includes(n) || n.includes(k))) return k; return null; };
+  for (const it of items) { const k = keyOf(it); if (!k) continue; used.add(k); if (sold.has(k)) { it.fields['Sold out'] = 'Yes'; Object.assign(it, kbStatus(it)); } }
+  return [...sold.keys()].filter(k => !used.has(k)).map(k => sold.get(k));
+}
 async function loadKb() {
   return cached('kb', 600e3, async () => {
     let source = 'live', sheets = {}, error = '';
@@ -862,8 +881,9 @@ async function loadKb() {
       sheets = b.sheets; source = 'backup ' + new Date(b.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     }
     const items = Object.entries(sheets).flatMap(([n, v]) => parseKbSheet(n, v || []));
+    const soldUnmatched = applySoldOut(items, sheets);
     const cats = [...new Set(items.map(i => i.cat))]; items.forEach(i => { const same = items.filter(x => x.cat === i.cat); i.rank = same.length - same.indexOf(i); });
-    return { items, cats, source, error: error.slice(0, 200), loadedAt: new Date().toISOString() };
+    return { items, cats, source, soldUnmatched, error: error.slice(0, 200), loadedAt: new Date().toISOString() };
   });
 }
 /* Portal-side edits of the workbook's offers: the workbook itself is never changed. */
