@@ -852,38 +852,65 @@ async function saveKbBackup(sheets) {
     await put(KB_BACKUP, enc({ at, sheets }), { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain' }); kbBackupAt = at;
   } catch (e) { console.error('KB backup not saved', e.message); }
 }
-/* A second kind of tab: one row per offer with tick boxes, for example Offer | T&Cs | notice | activation | 1st day to book | special terms | sold out. The ticks decide which offers are sold out. */
+/* The offers register: one tab with one row per offer (Offer | T&Cs | notice period | activation | 1st day to book | special terms | combined | sold out).
+   A ticked "sold out" box means the offer no longer takes deposits or subscriptions; an unticked one means it is on sale. */
 const kbNorm = x => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-function flatSoldOut(sheets) {
-  const sold = new Map(), seen = new Map();
-  for (const v of Object.values(sheets)) {
+const tick = v => v === true || /^(true|yes|y|1|x|✓|✔)$/i.test(String(v ?? '').trim());
+function parseRegister(sheets) {
+  const rows = [];
+  for (const [sheet, v] of Object.entries(sheets)) {
     let hr = -1, nc = -1, sc = -1;
     for (let r = 0; r < Math.min((v || []).length, 6) && hr < 0; r++) { const row = v[r] || []; const n = row.findIndex(c => /^\s*offer\s*$/i.test(String(c ?? ''))); const so = row.findIndex(c => /sold[\s-]*o/i.test(String(c ?? ''))); if (n >= 0 && so >= 0) { hr = r; nc = n; sc = so; } }
     if (hr < 0) continue;
-    for (let r = hr + 1; r < v.length; r++) { const nm = String((v[r] || [])[nc] ?? '').trim(); if (!nm) continue; const val = (v[r] || [])[sc]; seen.set(kbNorm(nm), nm); if (val === true || /^(true|yes|y|1|x|✓|✔)$/i.test(String(val ?? '').trim())) sold.set(kbNorm(nm), nm); }
+    const head = v[hr].map(h => String(h ?? '').replace(/\s+/g, ' ').trim());
+    const label = h => /notice/i.test(h) ? 'Notice period' : /^activation/i.test(h) ? 'Activation' : /1st day|first day/i.test(h) ? '1st day to book' : /spe+i?c?ial|special/i.test(h) ? 'Special terms' : /combined/i.test(h) ? 'Combined with other offers' : /sold/i.test(h) ? 'Sold out' : '';
+    for (let r = hr + 1; r < v.length; r++) {
+      const row = v[r] || []; const name = String(row[nc] ?? '').replace(/\s+/g, ' ').trim(); if (!name) continue;
+      const fields = {}; let sold = false;
+      head.forEach((h, c) => { const l = label(h); if (!l || c === nc) return; const raw = row[c]; if (l === 'Sold out') { sold = tick(raw); fields[l] = sold ? 'Yes' : 'No'; return; } if (l === 'Combined with other offers') { fields[l] = tick(raw) ? 'Yes' : 'No'; return; } const val = kbValue(raw, l); if (val) fields[l] = val; });
+      rows.push({ name, sold, fields, sheet, row: r });
+    }
   }
-  return { sold, seen };
+  return rows;
 }
-function applySoldOut(items, sheets) {
-  const { sold, seen } = flatSoldOut(sheets); const used = new Set();
-  if (!seen.size) return [];
-  const keyOf = i => { const n = kbNorm(i.name); if (seen.has(n)) return n; for (const k of seen.keys()) if (k.length >= 12 && n.length >= 12 && (k.includes(n) || n.includes(k))) return k; return null; };
-  for (const it of items) { const k = keyOf(it); if (!k) continue; used.add(k); if (sold.has(k)) { it.fields['Sold out'] = 'Yes'; Object.assign(it, kbStatus(it)); } }
-  return [...sold.keys()].filter(k => !used.has(k)).map(k => sold.get(k));
+function applyRegister(items, rows) {
+  if (!rows.length) return { used: 0, unmatched: [] };
+  const matches = new Map(); rows.forEach(rw => matches.set(rw, []));
+  const claimed = new Set();
+  const lookup = new Map(); items.forEach(it => { const k = kbNorm(it.name); (lookup.get(k) || lookup.set(k, []).get(k)).push(it); });
+  for (const rw of rows) {
+    const k = kbNorm(rw.name); let hit = lookup.get(k) || [];
+    if (!hit.length && k.length >= 8) hit = items.filter(it => { const n = kbNorm(it.name); return n.length >= 8 && (n.includes(k) || k.includes(n)); });
+    hit.forEach(it => { if (!claimed.has(it)) { claimed.add(it); matches.get(rw).push(it); } });
+  }
+  const seq = { n: 0 };
+  for (const rw of rows.slice().reverse()) {
+    let list = matches.get(rw);
+    if (!list.length) { const it = { id: 'RG' + (++seq.n) + '-' + rw.row, cat: 'Product', sheet: rw.sheet, order: 100000 + rw.row, name: rw.name, fields: {}, cover: KB_COVER.map(([l]) => [l, null]) }; items.push(it); list = [it]; claimed.add(it); }
+    for (const it of list) {
+      Object.assign(it.fields, rw.fields); it.reg = true; delete it.note;
+      const expired = /expired|no longer/i.test(rw.fields['Special terms'] || '');
+      if (rw.sold || expired) { it.status = 'Ended'; it.soldOut = rw.sold; it.note = rw.sold ? 'Sold out' : 'Expired'; delete it.end; }
+      else { it.status = 'On sale'; delete it.end; delete it.soldOut; }
+    }
+  }
+  // Anything still marked on sale that is not in the register is not current.
+  for (const it of items) if (!it.reg && (it.status === 'On sale' || it.status === 'While quota lasts')) { it.status = 'Ended'; it.note = 'Not in the current sheet'; delete it.end; }
+  return { used: claimed.size, unmatched: [] };
 }
 async function loadKb() {
   return cached('kb', 600e3, async () => {
-    let source = 'live', sheets = {}, error = '';
-    try { const names = await sheetNames(URLS.kb); for (const n of names) sheets[n] = await sheetValues(URLS.kb, n); if (!Object.entries(sheets).some(([n, v]) => parseKbSheet(n, v || []).length)) throw new Error('no offers found in the sheet layout'); await saveKbBackup(sheets); }
+    let source = 'live', sheets = {}, live = {}, error = '';
+    try { const names = await sheetNames(URLS.kb); for (const n of names) live[n] = await sheetValues(URLS.kb, n); sheets = live; if (!Object.entries(sheets).some(([n, v]) => parseKbSheet(n, v || []).length)) throw new Error('no offers found in the sheet layout'); await saveKbBackup(sheets); }
     catch (e) {
-      error = e.message; const b = await readKbBackup();
-      if (!b) throw new HttpError(503, "The knowledge base workbook can't be opened by the portal (" + e.message.slice(0, 120) + '). Share the file with opsportal@gto.org.uk.');
-      sheets = b.sheets; source = 'backup ' + new Date(b.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      error = e.message; const b = await readKbBackup(); const reg0 = parseRegister(live);
+      if (!b && !reg0.length) throw new HttpError(503, "The knowledge base workbook can't be opened by the portal (" + e.message.slice(0, 120) + '). Share the file with opsportal@gto.org.uk.');
+      if (b) { sheets = b.sheets; source = 'backup ' + new Date(b.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } else { sheets = {}; }
     }
     const items = Object.entries(sheets).flatMap(([n, v]) => parseKbSheet(n, v || []));
-    const soldUnmatched = applySoldOut(items, sheets);
+    const reg = parseRegister(live); applyRegister(items, reg);
     const cats = [...new Set(items.map(i => i.cat))]; items.forEach(i => { const same = items.filter(x => x.cat === i.cat); i.rank = same.length - same.indexOf(i); });
-    return { items, cats, source, soldUnmatched, error: error.slice(0, 200), loadedAt: new Date().toISOString() };
+    return { items, cats, source, register: reg.length > 0, soldUnmatched: [], error: error.slice(0, 200), loadedAt: new Date().toISOString() };
   });
 }
 /* Portal-side edits of the workbook's offers: the workbook itself is never changed. */
@@ -896,6 +923,7 @@ function deriveItem(it, base) {
   it.cover = KB_COVER.map(([label, rx]) => { const f = Object.keys(it.fields).find(x => rx.test(x)); return [label, f ? kbCover(it.fields[f]) : null]; });
   const tc = Object.entries(it.fields).find(([k]) => /terms/i.test(k)); const link = tc && (tc[1].match(/https?:\/\/\S+/) || [])[0]; it.link = link ? link.replace(/[)\].,]+$/, '') : undefined;
   delete it.soldOut; delete it.note;
+  if (base.reg) { it.status = base.status; it.end = base.end; if (base.soldOut) it.soldOut = base.soldOut; if (base.note) it.note = base.note; return; }
   const st = kbStatus(it); if (st && st.status) Object.assign(it, st); else { it.status = base.status; it.end = base.end; }
 }
 async function loadKbView() {
