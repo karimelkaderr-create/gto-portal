@@ -886,6 +886,7 @@ function applyRegister(items, rows) {
   const seq = { n: 0 };
   for (const rw of rows.slice().reverse()) {
     let list = matches.get(rw);
+    if (!list.length && (rw.sold || /expired|no longer/i.test(rw.fields['Special terms'] || ''))) continue; // history that is not in the portal's copy: nothing to show
     if (!list.length) { const it = { id: 'RG' + (++seq.n) + '-' + rw.row, cat: 'Product', sheet: rw.sheet, order: 100000 + rw.row, name: rw.name, fields: {}, cover: KB_COVER.map(([l]) => [l, null]) }; items.push(it); list = [it]; claimed.add(it); }
     for (const it of list) {
       Object.assign(it.fields, rw.fields); it.reg = true; delete it.note;
