@@ -272,6 +272,13 @@ input[type=checkbox]{accent-color:var(--gold)}
 /* assistant */
 .ai-fab{transition:top .35s cubic-bezier(.2,.8,.2,1),box-shadow .2s,transform .2s;position:fixed;right:28px;bottom:28px;z-index:45;display:flex;align-items:center;gap:10px;padding:13px 20px 13px 16px;border-radius:999px;border:0;cursor:pointer;background:var(--gold-grad);color:var(--gold-ink);font-weight:700;font-size:15px;box-shadow:0 12px 34px rgba(227,185,90,.35),0 0 0 1px rgba(255,255,255,.2) inset}
 .ai-fab svg,.ai-head svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ql-btn{position:fixed;right:28px;bottom:92px;z-index:45;width:48px;height:48px;border-radius:50%;border:1px solid var(--line,#ddd);background:var(--card,#fff);color:var(--ink,#222);cursor:pointer;display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.ql-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ql-pop{position:fixed;right:28px;bottom:148px;z-index:46;width:300px;max-width:calc(100vw - 32px);background:var(--card,#fff);color:var(--ink,#222);border:1px solid var(--line,#ddd);border-radius:16px;box-shadow:0 16px 44px rgba(0,0,0,.25);padding:10px;display:none}
+.ql-pop.open{display:block}.ql-pop h4{margin:6px 10px 8px;font-size:13px;opacity:.7;font-weight:600}
+.ql-pop a{display:flex;flex-direction:column;gap:1px;padding:9px 10px;border-radius:10px;text-decoration:none;color:inherit}.ql-pop a:hover{background:rgba(127,127,127,.12)}
+.ql-pop a b{font-size:14px}.ql-pop a span{font-size:12px;opacity:.65}.ai-open .ql-btn,.ai-open .ql-pop{display:none}
+@media (max-width:820px){.ql-btn{right:16px;bottom:152px}.ql-pop{right:16px;bottom:208px}}
 .ai-fab:hover{filter:brightness(1.06)}.ai-open .ai-fab{opacity:0;pointer-events:none}
 .ai-panel{position:fixed;top:0;right:0;bottom:0;width:min(470px,100vw);z-index:60;display:flex;flex-direction:column;background:rgba(17,19,23,.92);border-left:1px solid var(--edge-2);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);box-shadow:-30px 0 80px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .25s ease}
 .ai-panel.open{transform:none}
@@ -2204,7 +2211,27 @@ function aiMd(text){
   return out.join('');
 }
 /* The assistant button lives on every page, fixed in the bottom right corner. */
+const QUICK_LINKS=[
+  ['Templates','GTO English-Arabic Templates','https://inhouseworlduk-my.sharepoint.com/:w:/g/personal/hui-fen_inhouseworld_co_uk/IQC5ce0SBAvmSKxjOycD5erBAVnbj7IUkyC-R7DqU3n3a9U?e=GA7ZxL'],
+  ['QSC','GTO | Global Travel Organisation quotations','https://panel.gtomembers.com/quotations'],
+  ['Interakt','WhatsApp inbox, open chats','https://app.interakt.ai/inbox?filter=%7B%22chatStatus%22%3A%22Open%22%2C%22channel%22%3A%5B%22Whatsapp%22%5D%2C%22label%22%3A%5B%5D%2C%22assignee%22%3A%5B%22bbf7aa73-62af-47d0-9a80-12934e80a33f%22%5D%2C%22chatReplyStatus%22%3A%5B%5D%2C%22aiHandover%22%3Anull%2C%22tags%22%3A%5B%5D%2C%22customerServiceWindow%22%3Anull%2C%22unreadStatus%22%3Anull%2C%22lastMessageTime%22%3Anull%2C%22showSpamChats%22%3Anull%2C%22sortData%22%3A%7B%22field%22%3A%22last_activity_at_utc%22%2C%22order%22%3A%22desc%22%7D%7D&chatType=You'],
+  ['Posh Saver Credit','Posh Saver CR.xlsx','https://inhouseworlduk-my.sharepoint.com/:x:/r/personal/m_abdelgayed_gto_org_uk/_layouts/15/Doc.aspx?sourcedoc=%7B8D3068F5-0E88-4EAB-AB97-E3D387D319C0%7D&file=Posh%20Saver%20CR.xlsx&action=default&mobileredirect=true&wdExp=TEAMS-TREATMENT&web=1'],
+  ['Credit sheet','New 2026 Wallet System 171026.xlsx','https://inhouseworlduk-my.sharepoint.com/:x:/g/personal/hui-fen_inhouseworld_co_uk/IQCAIRDbCANzQYGu3vQA99zVAXuw_Brrgq6CWaW3YbmRRCU?wdExp=TEAMS-TREATMENT&web=1'],
+  ['Kudos','5 Kudos Clients Credits Sheet - Jun 26.xlsx','https://inhouseworlduk-my.sharepoint.com/:x:/r/personal/fatma_gto_org_uk/_layouts/15/Doc.aspx?sourcedoc=%7BD54C431B-7DA4-4D36-A025-683582E4ECC7%7D&file=5%20Kudos%20Clients%20Credits%20Sheet%20-%20Jun%2026.xlsx&action=default&mobileredirect=true']
+];
+function ensureQuickLinks(){
+  if ($('#qlbtn')) return;
+  const b=document.createElement('button'); b.className='ql-btn'; b.id='qlbtn'; b.setAttribute('aria-label','GTO Quick Links'); b.title='GTO Quick Links';
+  b.innerHTML='<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+  const p=document.createElement('div'); p.className='ql-pop'; p.id='qlpop';
+  p.innerHTML='<h4>GTO Quick Links</h4>'+QUICK_LINKS.map(l=>`<a href="${esc(l[2])}" target="_blank" rel="noopener noreferrer"><b>${esc(l[0])}</b><span>${esc(l[1])}</span></a>`).join('');
+  b.onclick=e=>{ e.stopPropagation(); p.classList.toggle('open'); };
+  document.addEventListener('click',e=>{ if(!p.contains(e.target)) p.classList.remove('open'); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') p.classList.remove('open'); });
+  document.body.appendChild(p); document.body.appendChild(b);
+}
 function ensureAiFab(){
+  ensureQuickLinks();
   let fab=$('#aifab');
   if (!fab){ fab=document.createElement('button'); fab.className='ai-fab'; fab.id='aifab'; fab.setAttribute('aria-label','Ask GTO Assist'); fab.innerHTML=`${KBI.spark}<span>Ask GTO Assist</span>`; fab.onclick=()=>aiOpen(); document.body.appendChild(fab); }
 }
